@@ -1,6 +1,6 @@
 import type { TaskResult, TemplateDetail, TemplateItem } from "./types";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 async function parseJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -24,7 +24,7 @@ export async function uploadTemplate(input: {
     method: "POST",
     body: form
   });
-  return parseJson(res);
+  return parseJson<{ template_id: string }>(res);
 }
 
 export async function listTemplates() {

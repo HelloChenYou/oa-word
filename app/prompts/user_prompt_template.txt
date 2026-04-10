@@ -6,22 +6,34 @@ language: zh-CN
 [规则包]
 {rule_pack}
 
-[文档分片]
+[待检查文本分片]
 {chunk_text}
 
-[输出 schema]
+[输出要求]
+- 仅输出一个 JSON 对象。
+- 顶层结构固定为：
 {{
-  "issues":[
-    {{
-      "severity":"P0|P1|P2",
-      "category":"spelling|grammar|punctuation|style|terminology|compliance|structure|logic",
-      "title":"string",
-      "original_text":"string",
-      "suggested_text":"string",
-      "reason":"string",
-      "evidence":"string",
-      "confidence":0.0,
-      "source":"llm"
-    }}
-  ]
+  "issues": []
 }}
+- 若发现问题，issues 中每一项必须严格符合以下 schema：
+{{
+  "severity": "P0|P1|P2",
+  "category": "spelling|grammar|punctuation|style|terminology|compliance|structure|logic",
+  "title": "string",
+  "original_text": "string",
+  "suggested_text": "string",
+  "reason": "string",
+  "evidence": "string",
+  "confidence": 0.0,
+  "source": "llm"
+}}
+
+[判定原则]
+1) 只输出“确定存在”的问题；不确定则不输出。
+2) original_text 必须可在“待检查文本分片”中定位。
+3) suggested_text 必须是可直接替换的文本，且不改变原意。
+4) confidence 取值范围为 0~1。
+5) 无问题时必须返回：{{"issues":[]}}
+
+[再次强调]
+不要输出任何额外文字；不要输出 Markdown；只输出 JSON。

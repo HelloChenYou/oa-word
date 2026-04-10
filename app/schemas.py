@@ -2,6 +2,8 @@ from typing import List, Literal
 
 from pydantic import BaseModel, Field
 
+from app.domain.issues import LlmIssuesResp, StoredIssue
+
 
 Mode = Literal["review", "rewrite"]
 Scene = Literal["general", "contract", "announcement", "tech_doc"]
@@ -24,16 +26,8 @@ class TaskStatusResp(BaseModel):
     status: str
 
 
-class IssueOut(BaseModel):
-    severity: str
-    category: str
-    title: str
-    original_text: str
-    suggested_text: str
-    reason: str
-    evidence: str
-    confidence: float
-    source: str
+class IssueOut(StoredIssue):
+    """External API issue shape."""
 
 
 class TaskResultResp(BaseModel):

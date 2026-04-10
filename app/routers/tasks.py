@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import ProofreadIssue, ProofreadTask, Template
 from app.queue import get_queue
@@ -45,7 +46,13 @@ async def create_task(req: CreateTaskReq, db: Session = Depends(get_db)):
     db.add(task)
     db.commit()
     queue = get_queue()
-    queue.enqueue("app.worker_tasks.process_proofread_task", task_id, job_id=task_id)
+    queue.enqueue(
+        "app.worker_tasks.process_proofread_task",
+        task_id,
+        job_id=task_id,
+        job_timeout=settings.effective_rq_job_timeout_sec,
+        result_ttl=settings.rq_result_ttl_sec,
+    )
     return CreateTaskResp(task_id=task_id, status="queued")
 
 

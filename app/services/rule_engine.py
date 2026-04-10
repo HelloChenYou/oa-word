@@ -1,8 +1,11 @@
 import re
 
+from app.domain.issues import StoredIssue
+from app.services.issue_converter import validate_rule_issue
+
 
 TERM_MAP = {
-    "OA系统": "OA 平台",
+    "OA系统": "OA平台",
     "登陆": "登录",
 }
 
@@ -11,40 +14,45 @@ SENSITIVE_PATTERNS = [
 ]
 
 
-def check_rules(text: str) -> list[dict]:
-    issues = []
+def check_rules(text: str) -> list[StoredIssue]:
+    """Run deterministic rule checks and return canonical issue models."""
+    issues: list[StoredIssue] = []
 
     for wrong, right in TERM_MAP.items():
         for _ in re.finditer(re.escape(wrong), text):
             issues.append(
-                {
-                    "severity": "P1",
-                    "category": "terminology",
-                    "title": "公司术语不一致",
-                    "original_text": wrong,
-                    "suggested_text": right,
-                    "reason": "与公司术语库冲突",
-                    "evidence": "rule_pack:corp_terms_v1",
-                    "confidence": 0.98,
-                    "source": "rule_engine",
-                }
+                validate_rule_issue(
+                    {
+                        "severity": "P1",
+                        "category": "terminology",
+                        "title": "公司术语不一致",
+                        "original_text": wrong,
+                        "suggested_text": right,
+                        "reason": "与公司术语库存在冲突",
+                        "evidence": "rule_pack:corp_terms_v1",
+                        "confidence": 0.98,
+                        "source": "rule_engine",
+                    }
+                )
             )
 
     for pattern, msg in SENSITIVE_PATTERNS:
-        for m in re.finditer(pattern, text):
-            hit = m.group(0)
+        for match in re.finditer(pattern, text):
+            hit = match.group(0)
             issues.append(
-                {
-                    "severity": "P0",
-                    "category": "compliance",
-                    "title": "疑似敏感信息",
-                    "original_text": hit,
-                    "suggested_text": f"{hit[:3]}****{hit[-4:]}",
-                    "reason": msg,
-                    "evidence": "rule_pack:compliance_v1",
-                    "confidence": 0.99,
-                    "source": "rule_engine",
-                }
+                validate_rule_issue(
+                    {
+                        "severity": "P0",
+                        "category": "compliance",
+                        "title": "疑似敏感信息",
+                        "original_text": hit,
+                        "suggested_text": f"{hit[:3]}****{hit[-4:]}",
+                        "reason": msg,
+                        "evidence": "rule_pack:compliance_v1",
+                        "confidence": 0.99,
+                        "source": "rule_engine",
+                    }
+                )
             )
 
     return issues
