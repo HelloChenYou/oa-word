@@ -1,0 +1,119 @@
+:root {
+  font-family: "Segoe UI", Arial, sans-serif;
+  color: #1f2937;
+  background: #f5f7fb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-width: 1200px;
+  margin: 24px auto;
+  padding: 0 16px 40px;
+}
+
+header h1 {
+  margin: 0 0 6px;
+}
+
+header p {
+  margin: 0 0 20px;
+  color: #6b7280;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+input,
+select,
+textarea,
+button {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+button {
+  cursor: pointer;
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+}
+
+button[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.row {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: end;
+}
+
+.block {
+  margin-top: 12px;
+}
+
+pre {
+  background: #f3f4f6;
+  padding: 10px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  border: 1px solid #e5e7eb;
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  background: #111827;
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 8px;
+  max-width: 420px;
+}

@@ -1,0 +1,27 @@
+[任务信息]
+mode: {mode}
+scene: {scene}
+language: zh-CN
+
+[规则包]
+{rule_pack}
+
+[文档分片]
+{chunk_text}
+
+[输出 schema]
+{{
+  "issues":[
+    {{
+      "severity":"P0|P1|P2",
+      "category":"spelling|grammar|punctuation|style|terminology|compliance|structure|logic",
+      "title":"string",
+      "original_text":"string",
+      "suggested_text":"string",
+      "reason":"string",
+      "evidence":"string",
+      "confidence":0.0,
+      "source":"llm"
+    }}
+  ]
+}}

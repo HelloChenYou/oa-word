@@ -1,0 +1,50 @@
+from datetime import datetime
+
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db import Base
+
+
+class ProofreadTask(Base):
+    __tablename__ = "proofread_tasks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(16))
+    scene: Mapped[str] = mapped_column(String(32))
+    template_id: Mapped[str | None] = mapped_column(ForeignKey("templates.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(16))
+    source_text: Mapped[str] = mapped_column(Text)
+    model_name: Mapped[str] = mapped_column(String(64), default="")
+    error_msg: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    finished_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+
+
+class ProofreadIssue(Base):
+    __tablename__ = "proofread_issues"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[str] = mapped_column(ForeignKey("proofread_tasks.id"))
+    severity: Mapped[str] = mapped_column(String(4))
+    category: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(255))
+    original_text: Mapped[str] = mapped_column(Text)
+    suggested_text: Mapped[str] = mapped_column(Text)
+    reason: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(16))
+
+
+class Template(Base):
+    __tablename__ = "templates"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    doc_type: Mapped[str] = mapped_column(String(32), default="general")
+    file_type: Mapped[str] = mapped_column(String(16))
+    file_path: Mapped[str] = mapped_column(String(512))
+    raw_text: Mapped[str] = mapped_column(Text)
+    parsed_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
