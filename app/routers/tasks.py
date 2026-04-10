@@ -1,13 +1,13 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import SessionLocal
 from app.models import ProofreadIssue, ProofreadTask, Template
-from app.queue import get_queue
+from app.queue import get_queue, get_redis_conn
 from app.schemas import (
     CreateTaskReq,
     CreateTaskResp,
@@ -15,6 +15,8 @@ from app.schemas import (
     TaskResultResp,
     TaskStatusResp,
 )
+from app.services.boundary_guard import ensure_active_tasks_within_limit, ensure_submit_rate_limit, ensure_text_within_limit
+from app.services.issue_converter import from_issue_record
 
 router = APIRouter(prefix="/api/v1/proofread", tags=["proofread"])
 
@@ -28,7 +30,12 @@ def get_db():
 
 
 @router.post("/tasks", response_model=CreateTaskResp)
-async def create_task(req: CreateTaskReq, db: Session = Depends(get_db)):
+async def create_task(req: CreateTaskReq, request: Request, db: Session = Depends(get_db)):
+    ensure_text_within_limit(req.text)
+    ensure_active_tasks_within_limit(db)
+    client_host = request.client.host if request.client and request.client.host else "unknown"
+    ensure_submit_rate_limit(get_redis_conn(), client_host)
+
     if req.template_id:
         template = db.get(Template, req.template_id)
         if not template:
@@ -49,6 +56,7 @@ async def create_task(req: CreateTaskReq, db: Session = Depends(get_db)):
     queue.enqueue(
         "app.worker_tasks.process_proofread_task",
         task_id,
+        req.owner_id,
         job_id=task_id,
         job_timeout=settings.effective_rq_job_timeout_sec,
         result_ttl=settings.rq_result_ttl_sec,
@@ -72,17 +80,7 @@ def get_result(task_id: str, db: Session = Depends(get_db)):
 
     rows = db.execute(select(ProofreadIssue).where(ProofreadIssue.task_id == task_id)).scalars().all()
     issues = [
-        IssueOut(
-            severity=row.severity,
-            category=row.category,
-            title=row.title,
-            original_text=row.original_text,
-            suggested_text=row.suggested_text,
-            reason=row.reason,
-            evidence=row.evidence,
-            confidence=row.confidence,
-            source=row.source,
-        )
+        IssueOut.model_validate(from_issue_record(row).model_dump())
         for row in rows
     ]
 

@@ -1,0 +1,41 @@
+[
+  {
+    "rule_id": "public_term_login",
+    "scope": "public",
+    "kind": "term_replace",
+    "title": "公司术语不一致",
+    "severity": "P1",
+    "category": "terminology",
+    "pattern": "登陆",
+    "replacement": "登录",
+    "reason": "与公共术语规范不一致",
+    "evidence": "knowledge:public_rules.json#public_term_login",
+    "enabled": true
+  },
+  {
+    "rule_id": "public_term_oa",
+    "scope": "public",
+    "kind": "term_replace",
+    "title": "公司术语不一致",
+    "severity": "P1",
+    "category": "terminology",
+    "pattern": "OA系统",
+    "replacement": "OA平台",
+    "reason": "与公共术语规范不一致",
+    "evidence": "knowledge:public_rules.json#public_term_oa",
+    "enabled": true
+  },
+  {
+    "rule_id": "public_mobile_mask",
+    "scope": "public",
+    "kind": "regex_mask",
+    "title": "疑似敏感信息",
+    "severity": "P0",
+    "category": "compliance",
+    "pattern": "\\b1[3-9]\\d{9}\\b",
+    "replacement": "",
+    "reason": "疑似手机号，建议脱敏",
+    "evidence": "knowledge:public_rules.json#public_mobile_mask",
+    "enabled": true
+  }
+]

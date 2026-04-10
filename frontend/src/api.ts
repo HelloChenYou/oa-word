@@ -1,11 +1,16 @@
-import type { TaskResult, TemplateDetail, TemplateItem } from "./types";
+import type { RuleItem, TaskResult, TemplateDetail, TemplateItem } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 async function parseJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+    try {
+      const parsed = JSON.parse(text) as { detail?: string };
+      throw new Error(parsed.detail || `HTTP ${res.status}`);
+    } catch {
+      throw new Error(text || `HTTP ${res.status}`);
+    }
   }
   return (await res.json()) as T;
 }
@@ -42,6 +47,7 @@ export async function createTask(input: {
   mode: "review" | "rewrite";
   scene: "general" | "contract" | "announcement" | "tech_doc";
   template_id?: string;
+  owner_id?: string;
 }) {
   const res = await fetch(`${API_BASE}/api/v1/proofread/tasks`, {
     method: "POST",
@@ -59,4 +65,44 @@ export async function getTaskStatus(taskId: string) {
 export async function getTaskResult(taskId: string) {
   const res = await fetch(`${API_BASE}/api/v1/proofread/tasks/${taskId}/result`);
   return parseJson<TaskResult>(res);
+}
+
+export async function listRules(input?: { scope?: string; ownerId?: string }) {
+  const params = new URLSearchParams();
+  if (input?.scope) params.set("scope", input.scope);
+  if (input?.ownerId) params.set("owner_id", input.ownerId);
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_BASE}/api/v1/rules${suffix}`);
+  return parseJson<RuleItem[]>(res);
+}
+
+export async function createRule(input: {
+  owner_id?: string;
+  scope: string;
+  kind: string;
+  title: string;
+  severity: string;
+  category: string;
+  pattern: string;
+  replacement: string;
+  reason: string;
+  evidence: string;
+  enabled: boolean;
+}) {
+  const res = await fetch(`${API_BASE}/api/v1/rules`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  return parseJson<RuleItem>(res);
+}
+
+export async function deleteRule(ruleId: string, ownerId?: string) {
+  const params = new URLSearchParams();
+  if (ownerId) params.set("owner_id", ownerId);
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_BASE}/api/v1/rules/${ruleId}${suffix}`, {
+    method: "DELETE"
+  });
+  return parseJson<{ ok: boolean }>(res);
 }

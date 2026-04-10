@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -12,13 +13,13 @@ class ProofreadTask(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     mode: Mapped[str] = mapped_column(String(16))
     scene: Mapped[str] = mapped_column(String(32))
-    template_id: Mapped[str | None] = mapped_column(ForeignKey("templates.id"), nullable=True)
+    template_id: Mapped[Optional[str]] = mapped_column(ForeignKey("templates.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(16))
     source_text: Mapped[str] = mapped_column(Text)
     model_name: Mapped[str] = mapped_column(String(64), default="")
     error_msg: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    finished_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class ProofreadIssue(Base):
@@ -47,4 +48,23 @@ class Template(Base):
     file_path: Mapped[str] = mapped_column(String(512))
     raw_text: Mapped[str] = mapped_column(Text)
     parsed_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class KnowledgeRuleRecord(Base):
+    __tablename__ = "knowledge_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rule_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    scope: Mapped[str] = mapped_column(String(16), index=True)
+    owner_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(255))
+    severity: Mapped[str] = mapped_column(String(4))
+    category: Mapped[str] = mapped_column(String(32))
+    pattern: Mapped[str] = mapped_column(Text)
+    replacement: Mapped[str] = mapped_column(Text, default="")
+    reason: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

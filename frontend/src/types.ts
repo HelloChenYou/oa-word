@@ -32,3 +32,20 @@ export type TaskResult = {
   summary: Record<string, number>;
   issues: Issue[];
 };
+
+export type RuleScope = "public" | "private" | "template";
+
+export type RuleItem = {
+  rule_id: string;
+  owner_id?: string | null;
+  scope: RuleScope;
+  kind: string;
+  title: string;
+  severity: string;
+  category: string;
+  pattern: string;
+  replacement: string;
+  reason: string;
+  evidence: string;
+  enabled: boolean;
+};

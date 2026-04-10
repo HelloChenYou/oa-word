@@ -3,6 +3,7 @@ from typing import List, Literal
 from pydantic import BaseModel, Field
 
 from app.domain.issues import LlmIssuesResp, StoredIssue
+from app.domain.rules import KnowledgeRule, RuleScope
 
 
 Mode = Literal["review", "rewrite"]
@@ -14,6 +15,7 @@ class CreateTaskReq(BaseModel):
     scene: Scene = "general"
     text: str = Field(min_length=1)
     template_id: str | None = None
+    owner_id: str | None = None
 
 
 class CreateTaskResp(BaseModel):
@@ -61,3 +63,21 @@ class TemplateDetailResp(BaseModel):
     raw_text: str
     parsed: dict
     created_at: str
+
+
+class CreateRuleReq(BaseModel):
+    owner_id: str | None = None
+    scope: RuleScope
+    kind: str
+    title: str
+    severity: str
+    category: str
+    pattern: str
+    replacement: str = ""
+    reason: str
+    evidence: str
+    enabled: bool = True
+
+
+class RuleOut(KnowledgeRule):
+    owner_id: str | None = None

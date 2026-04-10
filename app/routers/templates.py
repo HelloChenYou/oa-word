@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.models import Template
 from app.schemas import CreateTemplateResp, TemplateDetailResp, TemplateOut
+from app.services.boundary_guard import ensure_template_file_within_limit, ensure_template_text_within_limit
 from app.services.template_parser import parse_template_file
 
 router = APIRouter(prefix="/api/v1/templates", tags=["templates"])
@@ -39,9 +40,11 @@ async def upload_template(
     TEMPLATE_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
     save_path = TEMPLATE_STORAGE_DIR / f"{template_id}.{suffix}"
     content = await file.read()
+    ensure_template_file_within_limit(len(content))
     save_path.write_bytes(content)
 
     raw_text, parsed_json = parse_template_file(save_path, suffix)
+    ensure_template_text_within_limit(raw_text)
     row = Template(
         id=template_id,
         name=name,

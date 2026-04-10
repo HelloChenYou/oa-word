@@ -1,12 +1,15 @@
-def dedup_issues(issues: list[dict]) -> list[dict]:
+from app.domain.issues import StoredIssue
+
+
+def dedup_issues(issues: list[StoredIssue]) -> list[StoredIssue]:
     seen = set()
-    result = []
+    result: list[StoredIssue] = []
     for issue in issues:
         key = (
-            issue.get("category", ""),
-            issue.get("original_text", ""),
-            issue.get("suggested_text", ""),
-            issue.get("reason", ""),
+            issue.category,
+            issue.original_text,
+            issue.suggested_text,
+            issue.reason,
         )
         if key in seen:
             continue

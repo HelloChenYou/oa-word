@@ -1,0 +1,15 @@
+[
+  {
+    "rule_id": "private_demo_notice",
+    "scope": "private",
+    "kind": "term_replace",
+    "title": "部门写作口径不一致",
+    "severity": "P1",
+    "category": "style",
+    "pattern": "截止时间",
+    "replacement": "截至时间",
+    "reason": "当前用户的私人规则要求统一使用“截至时间”",
+    "evidence": "knowledge:private_rules/demo_user.json#private_demo_notice",
+    "enabled": true
+  }
+]

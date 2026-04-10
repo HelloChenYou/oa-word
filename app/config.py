@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     default_timeout_sec: int = 600
     rq_job_timeout_sec: int | None = None
     rq_result_ttl_sec: int = 86400
+    max_task_text_chars: int = 20000
+    max_template_file_bytes: int = 2 * 1024 * 1024
+    max_template_text_chars: int = 50000
+    max_issues_per_task: int = 200
+    max_active_tasks: int = 20
+    submit_rate_limit_window_sec: int = 60
+    submit_rate_limit_max_requests: int = 10
+    max_error_msg_chars: int = 2000
 
     @property
     def effective_rq_job_timeout_sec(self) -> int:
