@@ -120,7 +120,13 @@ def test_bootstrap_password_change_flow(monkeypatch):
         json={"current_password": "admin123456", "new_password": "new-admin-pass"},
     )
     assert change_resp.status_code == 200
-    assert change_resp.json()["must_change_password"] is False
+    body = change_resp.json()
+    assert body["user"]["must_change_password"] is False
+    assert body["access_token"]
+
+    me_resp = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {body['access_token']}"})
+    assert me_resp.status_code == 200
+    assert me_resp.json()["must_change_password"] is False
 
 
 def test_task_endpoints_work_for_authenticated_user(monkeypatch):

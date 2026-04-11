@@ -55,3 +55,11 @@ export type AuthUser = {
   role: string;
   must_change_password: boolean;
 };
+
+export type UserItem = {
+  username: string;
+  role: string;
+  enabled: boolean;
+  must_change_password: boolean;
+  created_at: string;
+};

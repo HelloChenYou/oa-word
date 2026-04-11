@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from app.config import settings
 from fastapi import Depends, HTTPException
 
-from app.schemas import AuthUserOut, ChangePasswordReq, LoginReq, LoginResp
+from app.schemas import AuthUserOut, ChangePasswordReq, ChangePasswordResp, LoginReq, LoginResp
 from app.security import authenticate_user, change_user_password, create_access_token, require_authenticated
 
 
@@ -36,7 +36,7 @@ def me(current_user: dict = Depends(require_authenticated)):
     )
 
 
-@router.post("/change-password", response_model=AuthUserOut)
+@router.post("/change-password", response_model=ChangePasswordResp)
 def change_password(req: ChangePasswordReq, current_user: dict = Depends(require_authenticated)):
     updated = change_user_password(
         username=current_user["username"],
@@ -45,8 +45,12 @@ def change_password(req: ChangePasswordReq, current_user: dict = Depends(require
     )
     if updated is None:
         raise HTTPException(status_code=400, detail="current password is incorrect")
-    return AuthUserOut(
-        username=updated["username"],
-        role=updated["role"],
-        must_change_password=updated["must_change_password"],
+    return ChangePasswordResp(
+        access_token=create_access_token(updated["username"], updated["role"], updated["must_change_password"]),
+        expires_in=settings.auth_token_expire_sec,
+        user=AuthUserOut(
+            username=updated["username"],
+            role=updated["role"],
+            must_change_password=updated["must_change_password"],
+        ),
     )

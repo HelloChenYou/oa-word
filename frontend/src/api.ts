@@ -1,4 +1,4 @@
-import type { AuthUser, RuleItem, TaskResult, TemplateDetail, TemplateItem } from "./types";
+import type { AuthUser, RuleItem, TaskResult, TemplateDetail, TemplateItem, UserItem } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 const DEFAULT_ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN ?? "";
@@ -84,7 +84,14 @@ export async function getTaskStatus(taskId: string) {
   const res = await fetch(`${API_BASE}/api/v1/proofread/tasks/${taskId}`, {
     headers: getAuthHeaders()
   });
-  return parseJson<{ task_id: string; status: string }>(res);
+  return parseJson<{
+    task_id: string;
+    status: string;
+    retry_count: number;
+    max_retries: number;
+    failure_reason: string;
+    error_msg: string;
+  }>(res);
 }
 
 export async function getTaskResult(taskId: string) {
@@ -186,5 +193,58 @@ export async function changePassword(input: { current_password: string; new_pass
     headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify(input)
   });
-  return parseJson<AuthUser>(res);
+  return parseJson<{ access_token: string; token_type: string; expires_in: number; user: AuthUser }>(res);
+}
+
+export async function listUsers() {
+  const res = await fetch(`${API_BASE}/api/v1/users`, {
+    headers: getAuthHeaders()
+  });
+  return parseJson<UserItem[]>(res);
+}
+
+export async function createUser(input: {
+  username: string;
+  password: string;
+  role: "admin" | "operator";
+  enabled: boolean;
+  must_change_password: boolean;
+}) {
+  const res = await fetch(`${API_BASE}/api/v1/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(input)
+  });
+  return parseJson<UserItem>(res);
+}
+
+export async function updateUser(
+  username: string,
+  input: {
+    role?: "admin" | "operator";
+    enabled?: boolean;
+    must_change_password?: boolean;
+  }
+) {
+  const res = await fetch(`${API_BASE}/api/v1/users/${username}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(input)
+  });
+  return parseJson<UserItem>(res);
+}
+
+export async function resetUserPassword(
+  username: string,
+  input: {
+    new_password: string;
+    must_change_password: boolean;
+  }
+) {
+  const res = await fetch(`${API_BASE}/api/v1/users/${username}/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(input)
+  });
+  return parseJson<UserItem>(res);
 }

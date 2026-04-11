@@ -8,6 +8,7 @@ from app.routers.ops import router as ops_router
 from app.routers.rules import router as rules_router
 from app.routers.tasks import router as tasks_router
 from app.routers.templates import router as templates_router
+from app.routers.users import router as users_router
 from app.security import bootstrap_admin_user, require_admin, require_authenticated
 from app.services.rule_repository import seed_builtin_rules
 
@@ -56,6 +57,7 @@ async def access_log_middleware(request, call_next):
     return response
 
 app.include_router(auth_router)
+app.include_router(users_router, dependencies=[Depends(require_admin)])
 app.include_router(rules_router, dependencies=[Depends(require_admin)])
 app.include_router(tasks_router, dependencies=[Depends(require_authenticated)])
 app.include_router(templates_router, dependencies=[Depends(require_admin)])

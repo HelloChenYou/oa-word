@@ -168,3 +168,78 @@ def change_user_password(username: str, current_password: str, new_password: str
         return _build_user_identity(user.username, user.role, user.must_change_password)
     finally:
         db.close()
+
+
+def list_users() -> list[UserAccount]:
+    db = SessionLocal()
+    try:
+        return db.execute(select(UserAccount).order_by(UserAccount.created_at.asc())).scalars().all()
+    finally:
+        db.close()
+
+
+def create_user_account(
+    username: str,
+    password: str,
+    role: str,
+    enabled: bool = True,
+    must_change_password: bool = True,
+) -> UserAccount | None:
+    db = SessionLocal()
+    try:
+        existing = db.execute(select(UserAccount).where(UserAccount.username == username)).scalar_one_or_none()
+        if existing is not None:
+            return None
+        user = UserAccount(
+            username=username,
+            password_hash=hash_password(password),
+            role=role,
+            enabled=enabled,
+            must_change_password=must_change_password,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    finally:
+        db.close()
+
+
+def update_user_account(
+    username: str,
+    *,
+    role: str | None = None,
+    enabled: bool | None = None,
+    must_change_password: bool | None = None,
+) -> UserAccount | None:
+    db = SessionLocal()
+    try:
+        user = db.execute(select(UserAccount).where(UserAccount.username == username)).scalar_one_or_none()
+        if user is None:
+            return None
+        if role is not None:
+            user.role = role
+        if enabled is not None:
+            user.enabled = enabled
+        if must_change_password is not None:
+            user.must_change_password = must_change_password
+        db.commit()
+        db.refresh(user)
+        return user
+    finally:
+        db.close()
+
+
+def reset_user_password(username: str, new_password: str, must_change_password: bool = True) -> UserAccount | None:
+    db = SessionLocal()
+    try:
+        user = db.execute(select(UserAccount).where(UserAccount.username == username)).scalar_one_or_none()
+        if user is None:
+            return None
+        user.password_hash = hash_password(new_password)
+        user.must_change_password = must_change_password
+        db.commit()
+        db.refresh(user)
+        return user
+    finally:
+        db.close()

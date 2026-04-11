@@ -128,3 +128,37 @@ class LoginResp(BaseModel):
 class ChangePasswordReq(BaseModel):
     current_password: str = Field(min_length=1)
     new_password: str = Field(min_length=8)
+
+
+class ChangePasswordResp(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: AuthUserOut
+
+
+class CreateUserReq(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=8)
+    role: Literal["admin", "operator"] = "operator"
+    enabled: bool = True
+    must_change_password: bool = True
+
+
+class UpdateUserReq(BaseModel):
+    role: Literal["admin", "operator"] | None = None
+    enabled: bool | None = None
+    must_change_password: bool | None = None
+
+
+class ResetUserPasswordReq(BaseModel):
+    new_password: str = Field(min_length=8)
+    must_change_password: bool = True
+
+
+class UserOut(BaseModel):
+    username: str
+    role: str
+    enabled: bool
+    must_change_password: bool
+    created_at: str
