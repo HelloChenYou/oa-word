@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  changePassword,
   createRule,
   createTask,
   deleteRule,
+  getCurrentUser,
   getTaskResult,
   getTaskStatus,
   getTemplateDetail,
   listRules,
   listTemplates,
+  login,
   updateRule,
   uploadTemplate
 } from "./api";
-import type { RuleItem, TaskResult, TemplateDetail, TemplateItem } from "./types";
+import type { AuthUser, RuleItem, TaskResult, TemplateDetail, TemplateItem } from "./types";
 
 type SectionKey = "rules" | "templates" | "tasks";
 type RuleScope = "private" | "public";
@@ -20,12 +23,16 @@ const SECTION_ORDER: SectionKey[] = ["rules", "templates", "tasks"];
 
 function getSectionFromHash(hash: string): SectionKey {
   const key = hash.replace("#", "") as SectionKey;
-  return SECTION_ORDER.includes(key) ? key : "rules";
+  return SECTION_ORDER.includes(key) ? key : "tasks";
 }
 
 function App() {
   const [activeSection, setActiveSection] = useState<SectionKey>(() => getSectionFromHash(window.location.hash));
-  const [adminToken, setAdminToken] = useState(() => window.localStorage.getItem("admin_api_token") ?? "");
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [loginUsername, setLoginUsername] = useState("admin");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
 
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -63,26 +70,46 @@ function App() {
     [templates]
   );
 
+  const isAdmin = currentUser?.role === "admin";
+  const mustChangePassword = currentUser?.must_change_password ?? false;
+
   useEffect(() => {
     const onHashChange = () => setActiveSection(getSectionFromHash(window.location.hash));
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
+  useEffect(() => {
+    const token = window.localStorage.getItem("auth_access_token");
+    if (!token) {
+      return;
+    }
+    getCurrentUser()
+      .then((user) => {
+        setCurrentUser(user);
+        setOwnerId(user.username);
+      })
+      .catch(() => {
+        window.localStorage.removeItem("auth_access_token");
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+    if (!isAdmin) {
+      setActiveSection("tasks");
+      window.location.hash = "tasks";
+    }
+  }, [currentUser, isAdmin]);
+
   const navigateTo = (section: SectionKey) => {
+    if (!isAdmin && section !== "tasks") {
+      return;
+    }
     window.location.hash = section;
     setActiveSection(section);
-  };
-
-  const saveAdminToken = () => {
-    const normalized = adminToken.trim();
-    if (normalized) {
-      window.localStorage.setItem("admin_api_token", normalized);
-      setMessage("管理口令已保存到本地浏览器。");
-    } else {
-      window.localStorage.removeItem("admin_api_token");
-      setMessage("已清除本地管理口令。");
-    }
   };
 
   const resetRuleForm = () => {
@@ -123,22 +150,85 @@ function App() {
   };
 
   useEffect(() => {
+    if (!currentUser || !isAdmin) {
+      return;
+    }
     loadTemplates().catch((err) => setMessage(`加载模板失败: ${String(err)}`));
-  }, []);
+  }, [currentUser, isAdmin]);
 
   useEffect(() => {
+    if (!currentUser || !isAdmin) {
+      return;
+    }
     loadRules().catch((err) => setMessage(`加载规则失败: ${String(err)}`));
-  }, [ownerId, ruleScope]);
+  }, [currentUser, ownerId, ruleScope, isAdmin]);
 
   useEffect(() => {
-    if (!selectedTemplateId) {
+    if (!selectedTemplateId || !currentUser || !isAdmin) {
       setSelectedTemplate(null);
       return;
     }
     getTemplateDetail(selectedTemplateId)
       .then(setSelectedTemplate)
       .catch((err) => setMessage(`读取模板详情失败: ${String(err)}`));
-  }, [selectedTemplateId]);
+  }, [selectedTemplateId, currentUser, isAdmin]);
+
+  const onLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+    try {
+      const resp = await login({ username: loginUsername.trim(), password: loginPassword });
+      window.localStorage.setItem("auth_access_token", resp.access_token);
+      setCurrentUser(resp.user);
+      setOwnerId(resp.user.username);
+      setCurrentPassword(loginPassword);
+      setLoginPassword("");
+      setMessage(`登录成功：${resp.user.username}`);
+    } catch (err) {
+      setMessage(`登录失败：${String(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onPasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.trim().length < 8) {
+      setMessage("新密码长度至少 8 位。");
+      return;
+    }
+    setLoading(true);
+    setMessage("");
+    try {
+      const updated = await changePassword({
+        current_password: currentPassword,
+        new_password: newPassword.trim()
+      });
+      setCurrentUser(updated);
+      setCurrentPassword("");
+      setNewPassword("");
+      setMessage("密码修改成功，请继续使用系统。");
+    } catch (err) {
+      setMessage(`密码修改失败：${String(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onLogout = () => {
+    window.localStorage.removeItem("auth_access_token");
+    setCurrentUser(null);
+    setCurrentPassword("");
+    setNewPassword("");
+    setTaskResult(null);
+    setTaskId("");
+    setTaskStatus("");
+    setRules([]);
+    setTemplates([]);
+    setSelectedTemplate(null);
+    setMessage("已退出登录。");
+  };
 
   const onUploadTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,7 +258,6 @@ function App() {
       setMessage("请完整填写规则标题、匹配内容、原因和依据。");
       return;
     }
-
     setLoading(true);
     setMessage("");
     try {
@@ -185,18 +274,13 @@ function App() {
         enabled: ruleEnabled
       };
       const scopedOwnerId = ruleScope === "private" ? ownerId : undefined;
-
       if (editingRuleId) {
         await updateRule(editingRuleId, payload, scopedOwnerId);
         setMessage(`规则更新成功: ${editingRuleId}`);
       } else {
-        await createRule({
-          owner_id: scopedOwnerId,
-          ...payload
-        });
+        await createRule({ owner_id: scopedOwnerId, ...payload });
         setMessage("规则创建成功。");
       }
-
       resetRuleForm();
       await loadRules();
     } catch (err) {
@@ -227,11 +311,7 @@ function App() {
     setLoading(true);
     setMessage("");
     try {
-      await updateRule(
-        rule.rule_id,
-        { enabled: !rule.enabled },
-        rule.scope === "private" ? ownerId : undefined
-      );
+      await updateRule(rule.rule_id, { enabled: !rule.enabled }, rule.scope === "private" ? ownerId : undefined);
       if (editingRuleId === rule.rule_id) {
         setRuleEnabled(!rule.enabled);
       }
@@ -294,55 +374,97 @@ function App() {
     }
   };
 
+  if (!currentUser) {
+    return (
+      <div className="page">
+        <section className="card auth-card">
+          <h1>OA 文稿校对平台</h1>
+          <p>请先登录后再访问系统。</p>
+          <form onSubmit={onLogin} className="grid">
+            <label>
+              用户名
+              <input value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} />
+            </label>
+            <label>
+              密码
+              <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
+            </label>
+            <div className="actions full">
+              <button type="submit" disabled={loading}>
+                登录
+              </button>
+            </div>
+          </form>
+          {message && <div className="toast">{message}</div>}
+        </section>
+      </div>
+    );
+  }
+
+  if (mustChangePassword) {
+    return (
+      <div className="page">
+        <section className="card auth-card">
+          <h1>首次登录请修改密码</h1>
+          <p>当前账号使用的是初始化密码，继续使用前必须先修改。</p>
+          <form onSubmit={onPasswordChange} className="grid">
+            <label>
+              当前密码
+              <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+            </label>
+            <label>
+              新密码
+              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            </label>
+            <div className="actions full">
+              <button type="submit" disabled={loading}>
+                修改密码
+              </button>
+              <button type="button" onClick={onLogout} disabled={loading}>
+                退出登录
+              </button>
+            </div>
+          </form>
+          {message && <div className="toast">{message}</div>}
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <header className="hero">
         <div>
           <h1>AI 公文助手管理台</h1>
-          <p>规则、模板、任务分区管理，支持快速跳转和独立维护。</p>
+          <p>
+            当前用户：{currentUser.username}，角色：{currentUser.role}
+          </p>
         </div>
         <div className="hero-side">
           <nav className="topnav">
-            <button
-              type="button"
-              className={activeSection === "rules" ? "nav-btn active" : "nav-btn"}
-              onClick={() => navigateTo("rules")}
-            >
-              规则管理
-            </button>
-            <button
-              type="button"
-              className={activeSection === "templates" ? "nav-btn active" : "nav-btn"}
-              onClick={() => navigateTo("templates")}
-            >
-              模板管理
-            </button>
-            <button
-              type="button"
-              className={activeSection === "tasks" ? "nav-btn active" : "nav-btn"}
-              onClick={() => navigateTo("tasks")}
-            >
+            {isAdmin && (
+              <>
+                <button type="button" className={activeSection === "rules" ? "nav-btn active" : "nav-btn"} onClick={() => navigateTo("rules")}>
+                  规则管理
+                </button>
+                <button type="button" className={activeSection === "templates" ? "nav-btn active" : "nav-btn"} onClick={() => navigateTo("templates")}>
+                  模板管理
+                </button>
+              </>
+            )}
+            <button type="button" className={activeSection === "tasks" ? "nav-btn active" : "nav-btn"} onClick={() => navigateTo("tasks")}>
               任务管理
             </button>
           </nav>
           <div className="auth-panel">
-            <label>
-              管理口令
-              <input
-                type="password"
-                value={adminToken}
-                onChange={(e) => setAdminToken(e.target.value)}
-                placeholder="未配置时开发环境可留空"
-              />
-            </label>
-            <button type="button" onClick={saveAdminToken}>
-              保存口令
+            <button type="button" onClick={onLogout}>
+              退出登录
             </button>
           </div>
         </div>
       </header>
 
-      {activeSection === "rules" && (
+      {isAdmin && activeSection === "rules" && (
         <section id="rules" className="card">
           <h2>规则管理</h2>
           <form onSubmit={onSubmitRule} className="grid">
@@ -366,7 +488,7 @@ function App() {
             </label>
             <label>
               标题
-              <input value={ruleTitle} onChange={(e) => setRuleTitle(e.target.value)} placeholder="例如 部门写作口径统一" />
+              <input value={ruleTitle} onChange={(e) => setRuleTitle(e.target.value)} placeholder="例如 部门术语统一" />
             </label>
             <label>
               严重级别
@@ -388,19 +510,19 @@ function App() {
             </label>
             <label>
               匹配内容
-              <input value={rulePattern} onChange={(e) => setRulePattern(e.target.value)} placeholder="例如 截止时间" />
+              <input value={rulePattern} onChange={(e) => setRulePattern(e.target.value)} placeholder="例如 登陆" />
             </label>
             <label>
               替换内容
-              <input value={ruleReplacement} onChange={(e) => setRuleReplacement(e.target.value)} placeholder="例如 截至时间" />
+              <input value={ruleReplacement} onChange={(e) => setRuleReplacement(e.target.value)} placeholder="例如 登录" />
             </label>
             <label className="full">
               原因
-              <input value={ruleReason} onChange={(e) => setRuleReason(e.target.value)} placeholder="说明命中后为什么要提示" />
+              <input value={ruleReason} onChange={(e) => setRuleReason(e.target.value)} placeholder="说明为什么需要提示" />
             </label>
             <label className="full">
               依据
-              <input value={ruleEvidence} onChange={(e) => setRuleEvidence(e.target.value)} placeholder="例如 private_rule:demo_user:deadline_style" />
+              <input value={ruleEvidence} onChange={(e) => setRuleEvidence(e.target.value)} placeholder="例如 private_rule:demo_user:login" />
             </label>
             <label className="checkbox">
               <input type="checkbox" checked={ruleEnabled} onChange={(e) => setRuleEnabled(e.target.checked)} />
@@ -412,13 +534,6 @@ function App() {
               </button>
               <button type="button" onClick={resetRuleForm} disabled={loading}>
                 {editingRuleId ? "取消编辑" : "重置表单"}
-              </button>
-              <button
-                type="button"
-                onClick={() => loadRules().catch((err) => setMessage(`加载规则失败: ${String(err)}`))}
-                disabled={loading}
-              >
-                刷新规则
               </button>
             </div>
           </form>
@@ -468,7 +583,7 @@ function App() {
         </section>
       )}
 
-      {activeSection === "templates" && (
+      {isAdmin && activeSection === "templates" && (
         <section id="templates" className="card">
           <h2>模板管理</h2>
           <form onSubmit={onUploadTemplate} className="grid">
@@ -500,9 +615,6 @@ function App() {
                 ))}
               </select>
             </label>
-            <button onClick={() => loadTemplates().catch((err) => setMessage(`加载模板失败: ${String(err)}`))} disabled={loading}>
-              刷新模板
-            </button>
           </div>
 
           {selectedTemplate && (
@@ -537,7 +649,7 @@ function App() {
               </label>
               <label>
                 任务 Owner ID
-                <input value={ownerId} onChange={(e) => setOwnerId(e.target.value)} placeholder="例如 demo_user" />
+                <input value={ownerId} onChange={(e) => setOwnerId(e.target.value)} disabled={!isAdmin} placeholder={currentUser.username} />
               </label>
               <label className="full">
                 文本内容

@@ -83,6 +83,11 @@ header p {
   grid-column: 1 / -1;
 }
 
+.auth-card {
+  max-width: 640px;
+  margin: 48px auto;
+}
+
 .actions {
   display: flex;
   gap: 10px;

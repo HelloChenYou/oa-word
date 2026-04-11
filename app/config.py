@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     app_port: int = 8080
     admin_api_token: str | None = None
     cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    auth_secret_key: str = "change-me-in-prod"
+    auth_token_expire_sec: int = 12 * 60 * 60
+    bootstrap_admin_username: str = "admin"
+    bootstrap_admin_password: str = "admin123456"
 
     database_url: str = "postgresql+psycopg://proofread:proofread@localhost:5432/proofread"
     redis_url: str = "redis://localhost:6379/0"
@@ -66,7 +70,10 @@ settings = Settings()
 
 
 def validate_runtime_settings() -> None:
-    if settings.app_env.lower() == "prod" and not settings.admin_auth_enabled:
-        raise RuntimeError("ADMIN_API_TOKEN must be configured when APP_ENV=prod")
+    if settings.app_env.lower() == "prod":
+        if not settings.admin_auth_enabled and not settings.auth_secret_key.strip():
+            raise RuntimeError("AUTH_SECRET_KEY or ADMIN_API_TOKEN must be configured when APP_ENV=prod")
+        if settings.auth_secret_key == "change-me-in-prod":
+            raise RuntimeError("AUTH_SECRET_KEY must be changed when APP_ENV=prod")
     if not settings.cors_allow_origins_list:
         raise RuntimeError("CORS_ALLOW_ORIGINS must contain at least one origin")

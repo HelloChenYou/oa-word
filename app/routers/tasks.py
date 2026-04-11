@@ -16,6 +16,7 @@ from app.schemas import (
     TaskResultResp,
     TaskStatusResp,
 )
+from app.security import require_authenticated
 from app.services.boundary_guard import ensure_active_tasks_within_limit, ensure_submit_rate_limit, ensure_text_within_limit
 from app.services.issue_converter import from_issue_record
 
@@ -31,7 +32,12 @@ def get_db():
 
 
 @router.post("/tasks", response_model=CreateTaskResp)
-async def create_task(req: CreateTaskReq, request: Request, db: Session = Depends(get_db)):
+async def create_task(
+    req: CreateTaskReq,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated),
+):
     ensure_text_within_limit(req.text)
     ensure_active_tasks_within_limit(db)
     client_host = request.client.host if request.client and request.client.host else "unknown"
@@ -42,12 +48,16 @@ async def create_task(req: CreateTaskReq, request: Request, db: Session = Depend
         if not template:
             raise HTTPException(status_code=404, detail="template not found")
 
+    task_owner_id = req.owner_id or current_user["username"]
+    if current_user["role"] != "admin":
+        task_owner_id = current_user["username"]
+
     task_id = f"t_{uuid.uuid4().hex[:16]}"
     task = ProofreadTask(
         id=task_id,
         mode=req.mode,
         scene=req.scene,
-        owner_id=req.owner_id,
+        owner_id=task_owner_id,
         template_id=req.template_id,
         status="queued",
         source_text=req.text,
@@ -57,15 +67,17 @@ async def create_task(req: CreateTaskReq, request: Request, db: Session = Depend
     )
     db.add(task)
     db.commit()
-    enqueue_proofread_task(task_id, req.owner_id, attempt=0)
+    enqueue_proofread_task(task_id, task_owner_id, attempt=0)
     return CreateTaskResp(task_id=task_id, status="queued")
 
 
 @router.get("/tasks/{task_id}", response_model=TaskStatusResp)
-def get_task(task_id: str, db: Session = Depends(get_db)):
+def get_task(task_id: str, db: Session = Depends(get_db), current_user: dict = Depends(require_authenticated)):
     task = db.get(ProofreadTask, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="task not found")
+    if current_user["role"] != "admin" and task.owner_id != current_user["username"]:
+        raise HTTPException(status_code=403, detail="forbidden")
     return TaskStatusResp(
         task_id=task_id,
         status=task.status,
@@ -77,10 +89,12 @@ def get_task(task_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/tasks/{task_id}/retry", response_model=RetryTaskResp)
-def retry_task(task_id: str, db: Session = Depends(get_db)):
+def retry_task(task_id: str, db: Session = Depends(get_db), current_user: dict = Depends(require_authenticated)):
     task = db.get(ProofreadTask, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="task not found")
+    if current_user["role"] != "admin" and task.owner_id != current_user["username"]:
+        raise HTTPException(status_code=403, detail="forbidden")
     if task.status in {"queued", "running", "retrying"}:
         raise HTTPException(status_code=409, detail="task is already in progress")
 
@@ -100,10 +114,12 @@ def retry_task(task_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/tasks/{task_id}/result", response_model=TaskResultResp)
-def get_result(task_id: str, db: Session = Depends(get_db)):
+def get_result(task_id: str, db: Session = Depends(get_db), current_user: dict = Depends(require_authenticated)):
     task = db.get(ProofreadTask, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="task not found")
+    if current_user["role"] != "admin" and task.owner_id != current_user["username"]:
+        raise HTTPException(status_code=403, detail="forbidden")
 
     rows = db.execute(select(ProofreadIssue).where(ProofreadIssue.task_id == task_id)).scalars().all()
     issues = [

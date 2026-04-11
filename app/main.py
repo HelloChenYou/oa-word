@@ -3,16 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings, validate_runtime_settings
 from app.logging_utils import configure_logging
+from app.routers.auth import router as auth_router
 from app.routers.ops import router as ops_router
 from app.routers.rules import router as rules_router
 from app.routers.tasks import router as tasks_router
 from app.routers.templates import router as templates_router
-from app.security import require_admin
+from app.security import bootstrap_admin_user, require_admin, require_authenticated
 from app.services.rule_repository import seed_builtin_rules
 
 configure_logging()
 validate_runtime_settings()
 seed_builtin_rules()
+bootstrap_admin_user()
 
 app = FastAPI(title="Proofread MVP", version="0.1.0")
 app.add_middleware(
@@ -53,8 +55,9 @@ async def access_log_middleware(request, call_next):
     )
     return response
 
+app.include_router(auth_router)
 app.include_router(rules_router, dependencies=[Depends(require_admin)])
-app.include_router(tasks_router, dependencies=[Depends(require_admin)])
+app.include_router(tasks_router, dependencies=[Depends(require_authenticated)])
 app.include_router(templates_router, dependencies=[Depends(require_admin)])
 app.include_router(ops_router, dependencies=[Depends(require_admin)])
 

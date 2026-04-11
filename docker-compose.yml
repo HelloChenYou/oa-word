@@ -13,6 +13,11 @@ services:
     depends_on:
       - postgres
     restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"print('ok')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 1
 
   frontend:
     build:
@@ -25,6 +30,12 @@ services:
       - "5173:80"
     depends_on:
       - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   api:
     image: python:3.11-slim
@@ -44,6 +55,12 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).read()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   worker:
     image: python:3.11-slim
@@ -61,6 +78,12 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"from redis import Redis; Redis.from_url('redis://redis:6379/0').ping()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   postgres:
     image: postgres:16
@@ -76,6 +99,12 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proofread -d proofread"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7
@@ -84,6 +113,12 @@ services:
       - TZ=Asia/Shanghai
     ports:
       - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 
 volumes:

@@ -1,17 +1,23 @@
-import type { RuleItem, TaskResult, TemplateDetail, TemplateItem } from "./types";
+import type { AuthUser, RuleItem, TaskResult, TemplateDetail, TemplateItem } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 const DEFAULT_ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN ?? "";
 
 function getAuthHeaders(): HeadersInit {
-  const token = window.localStorage.getItem("admin_api_token") || DEFAULT_ADMIN_TOKEN;
-  if (!token) {
-    return {};
+  const authToken = window.localStorage.getItem("auth_access_token");
+  if (authToken) {
+    return {
+      Authorization: `Bearer ${authToken}`
+    };
   }
-  return {
-    Authorization: `Bearer ${token}`,
-    "X-Admin-Token": token
-  };
+  const adminToken = window.localStorage.getItem("admin_api_token") || DEFAULT_ADMIN_TOKEN;
+  if (adminToken) {
+    return {
+      Authorization: `Bearer ${adminToken}`,
+      "X-Admin-Token": adminToken
+    };
+  }
+  return {};
 }
 
 async function parseJson<T>(res: Response): Promise<T> {
@@ -156,4 +162,29 @@ export async function deleteRule(ruleId: string, ownerId?: string) {
     headers: getAuthHeaders()
   });
   return parseJson<{ ok: boolean }>(res);
+}
+
+export async function login(input: { username: string; password: string }) {
+  const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  return parseJson<{ access_token: string; token_type: string; expires_in: number; user: AuthUser }>(res);
+}
+
+export async function getCurrentUser() {
+  const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
+    headers: getAuthHeaders()
+  });
+  return parseJson<AuthUser>(res);
+}
+
+export async function changePassword(input: { current_password: string; new_password: string }) {
+  const res = await fetch(`${API_BASE}/api/v1/auth/change-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(input)
+  });
+  return parseJson<AuthUser>(res);
 }

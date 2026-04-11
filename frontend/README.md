@@ -1,42 +1,47 @@
-# OA 公文助手前端管理台
+# OA Word Frontend
 
-## 1. 安装依赖
+前端技术栈：
+- Vite
+- React
+- TypeScript
+- Nginx
 
-```bash
+## 本地开发
+
+1. 安装依赖
+
+```powershell
 npm install
 ```
 
-## 2. 配置 API 地址
+2. 复制环境变量
 
-```bash
-copy .env.example .env
+```powershell
+Copy-Item .env.example .env
 ```
 
-默认后端地址为 `http://localhost:8080`。
+3. 启动开发服务器
 
-## 3. 启动开发环境
-
-```bash
+```powershell
 npm run dev
 ```
 
-浏览器访问 `http://localhost:5173`。
+默认访问地址：
+- `http://localhost:5173`
 
-## Docker 启动（Nginx 静态托管）
+## Docker 运行
 
 在项目根目录执行：
 
-```bash
+```powershell
 docker compose up -d --build frontend
 ```
 
-访问地址：
+## 功能入口
 
-- `http://localhost:5173`
+当前管理台包含：
+- 规则管理
+- 模板管理
+- 任务管理
 
-## 功能
-
-- 上传模板（支持 `docx` / `txt` / `md`）
-- 查看模板列表和模板解析结果
-- 创建校对任务（可绑定模板）
-- 查询任务状态和结果
+如果后端启用了 `ADMIN_API_TOKEN`，需要在页面顶部填写管理口令后再访问受保护接口。

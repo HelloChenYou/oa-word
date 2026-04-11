@@ -49,3 +49,9 @@ export type RuleItem = {
   evidence: string;
   enabled: boolean;
 };
+
+export type AuthUser = {
+  username: string;
+  role: string;
+  must_change_password: boolean;
+};

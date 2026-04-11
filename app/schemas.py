@@ -105,3 +105,26 @@ class UpdateRuleReq(BaseModel):
 
 class RuleOut(KnowledgeRule):
     owner_id: str | None = None
+
+
+class LoginReq(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+
+
+class AuthUserOut(BaseModel):
+    username: str
+    role: str
+    must_change_password: bool = False
+
+
+class LoginResp(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: AuthUserOut
+
+
+class ChangePasswordReq(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8)
