@@ -88,6 +88,22 @@ def _build_user_identity(username: str, role: str, must_change_password: bool = 
     return {"username": username, "role": role, "must_change_password": must_change_password}
 
 
+def get_user_identity(username: str) -> dict | None:
+    """Load the current auth state from the database.
+
+    Tokens prove identity and expiration, but role/enabled/password-rotation state
+    should come from the database so admin-side changes take effect immediately.
+    """
+    db = SessionLocal()
+    try:
+        user = db.execute(select(UserAccount).where(UserAccount.username == username)).scalar_one_or_none()
+        if user is None or not user.enabled:
+            return None
+        return _build_user_identity(user.username, user.role, user.must_change_password)
+    finally:
+        db.close()
+
+
 def bootstrap_admin_user() -> None:
     if not settings.bootstrap_admin_username.strip() or not settings.bootstrap_admin_password.strip():
         return
@@ -141,7 +157,10 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="unauthorized")
 
     payload = decode_access_token(token)
-    return _build_user_identity(payload["sub"], payload["role"], bool(payload.get("must_change_password", False)))
+    user = get_user_identity(payload["sub"])
+    if user is None:
+        raise HTTPException(status_code=401, detail="user disabled or not found")
+    return user
 
 
 def require_authenticated(current_user: dict = Depends(get_current_user)) -> dict:

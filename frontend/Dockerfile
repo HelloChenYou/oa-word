@@ -2,6 +2,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 COPY package*.json ./
+COPY scripts ./scripts
+ENV ALLOW_NPM_COMMANDS=1
 RUN npm install
 COPY . .
 RUN npm run build

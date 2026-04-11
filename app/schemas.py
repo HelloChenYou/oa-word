@@ -86,7 +86,6 @@ class CreateRuleReq(BaseModel):
     pattern: str
     replacement: str = ""
     reason: str
-    evidence: str
     enabled: bool = True
 
 
@@ -99,7 +98,6 @@ class UpdateRuleReq(BaseModel):
     pattern: str | None = None
     replacement: str | None = None
     reason: str | None = None
-    evidence: str | None = None
     enabled: bool | None = None
 
 

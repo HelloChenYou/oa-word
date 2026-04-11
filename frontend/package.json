@@ -4,8 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "preinstall": "node scripts/guard-npm.mjs install",
+    "predev": "node scripts/guard-npm.mjs dev",
     "dev": "vite",
+    "prebuild": "node scripts/guard-npm.mjs build",
     "build": "tsc -b && vite build",
+    "prepreview": "node scripts/guard-npm.mjs preview",
     "preview": "vite preview"
   },
   "dependencies": {

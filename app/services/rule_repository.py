@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.db import SessionLocal
 from app.domain.rules import KnowledgeRule
@@ -117,7 +117,7 @@ def load_private_rules(owner_id: str | None) -> list[KnowledgeRule]:
         db.close()
 
 
-def list_rules(scope: str | None = None, owner_id: str | None = None):
+def list_rules(scope: str | None = None, owner_id: str | None = None, keyword: str | None = None):
     db = SessionLocal()
     try:
         from app.models import KnowledgeRuleRecord
@@ -127,6 +127,19 @@ def list_rules(scope: str | None = None, owner_id: str | None = None):
             stmt = stmt.where(KnowledgeRuleRecord.scope == scope)
         if owner_id is not None:
             stmt = stmt.where(KnowledgeRuleRecord.owner_id == owner_id)
+        if keyword:
+            pattern = f"%{keyword}%"
+            stmt = stmt.where(
+                or_(
+                    KnowledgeRuleRecord.rule_id.ilike(pattern),
+                    KnowledgeRuleRecord.owner_id.ilike(pattern),
+                    KnowledgeRuleRecord.title.ilike(pattern),
+                    KnowledgeRuleRecord.pattern.ilike(pattern),
+                    KnowledgeRuleRecord.replacement.ilike(pattern),
+                    KnowledgeRuleRecord.reason.ilike(pattern),
+                    KnowledgeRuleRecord.evidence.ilike(pattern),
+                )
+            )
         return db.execute(stmt.order_by(KnowledgeRuleRecord.id.asc())).scalars().all()
     finally:
         db.close()

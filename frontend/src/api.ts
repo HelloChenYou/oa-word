@@ -101,10 +101,11 @@ export async function getTaskResult(taskId: string) {
   return parseJson<TaskResult>(res);
 }
 
-export async function listRules(input?: { scope?: string; ownerId?: string }) {
+export async function listRules(input?: { scope?: string; ownerId?: string; keyword?: string }) {
   const params = new URLSearchParams();
   if (input?.scope) params.set("scope", input.scope);
   if (input?.ownerId) params.set("owner_id", input.ownerId);
+  if (input?.keyword) params.set("keyword", input.keyword);
   const suffix = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(`${API_BASE}/api/v1/rules${suffix}`, {
     headers: getAuthHeaders()
@@ -122,7 +123,6 @@ export async function createRule(input: {
   pattern: string;
   replacement: string;
   reason: string;
-  evidence: string;
   enabled: boolean;
 }) {
   const res = await fetch(`${API_BASE}/api/v1/rules`, {
@@ -144,7 +144,6 @@ export async function updateRule(
     pattern?: string;
     replacement?: string;
     reason?: string;
-    evidence?: string;
     enabled?: boolean;
   },
   ownerId?: string

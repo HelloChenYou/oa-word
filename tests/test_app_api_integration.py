@@ -129,6 +129,33 @@ def test_bootstrap_password_change_flow(monkeypatch):
     assert me_resp.json()["must_change_password"] is False
 
 
+def test_me_reads_latest_user_state_from_database(monkeypatch):
+    monkeypatch.setattr("app.config.settings.auth_secret_key", "unit-test-secret")
+    client, session_factory = _build_test_client(monkeypatch)
+
+    db = session_factory()
+    try:
+        admin = db.query(models.UserAccount).filter(models.UserAccount.username == "admin").one()
+        admin.must_change_password = True
+        db.commit()
+    finally:
+        db.close()
+
+    token = _login(client, "admin", "admin123456")
+
+    db = session_factory()
+    try:
+        admin = db.query(models.UserAccount).filter(models.UserAccount.username == "admin").one()
+        admin.must_change_password = False
+        db.commit()
+    finally:
+        db.close()
+
+    me_resp = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me_resp.status_code == 200
+    assert me_resp.json()["must_change_password"] is False
+
+
 def test_task_endpoints_work_for_authenticated_user(monkeypatch):
     monkeypatch.setattr("app.config.settings.auth_secret_key", "unit-test-secret")
     client, session_factory = _build_test_client(monkeypatch)

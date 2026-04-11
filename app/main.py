@@ -58,7 +58,7 @@ async def access_log_middleware(request, call_next):
 
 app.include_router(auth_router)
 app.include_router(users_router, dependencies=[Depends(require_admin)])
-app.include_router(rules_router, dependencies=[Depends(require_admin)])
+app.include_router(rules_router, dependencies=[Depends(require_authenticated)])
 app.include_router(tasks_router, dependencies=[Depends(require_authenticated)])
 app.include_router(templates_router, dependencies=[Depends(require_admin)])
 app.include_router(ops_router, dependencies=[Depends(require_admin)])

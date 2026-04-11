@@ -1,21 +1,57 @@
 import uuid
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.domain.rules import KnowledgeRule
 from app.schemas import CreateRuleReq, RuleOut, UpdateRuleReq
+from app.security import require_authenticated
 from app.services.rule_repository import create_rule, delete_rule, list_rules, update_rule
 
 
 router = APIRouter(prefix="/api/v1/rules", tags=["rules"])
 
 
+def _is_admin(user: dict) -> bool:
+    return user.get("role") == "admin"
+
+
+def _assert_can_write_rule(scope: str, owner_id: str | None, current_user: dict) -> str | None:
+    if scope == "public":
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="public rules can only be modified by admin")
+        return None
+
+    if _is_admin(current_user):
+        return owner_id or current_user["username"]
+
+    if owner_id and owner_id != current_user["username"]:
+        raise HTTPException(status_code=403, detail="cannot modify another user's private rules")
+    return current_user["username"]
+
+
+def _build_rule_evidence(scope: str, owner_id: str | None, rule_id: str) -> str:
+    if scope == "public":
+        return f"public_rule:{rule_id}"
+    return f"private_rule:{owner_id or 'unknown'}:{rule_id}"
+
+
 @router.get("", response_model=list[RuleOut])
 def get_rules(
     scope: str | None = Query(default=None),
     owner_id: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    current_user: dict = Depends(require_authenticated),
 ):
-    rows = list_rules(scope=scope, owner_id=owner_id)
+    effective_scope = scope
+    effective_owner_id = owner_id
+    if not _is_admin(current_user):
+        if scope == "public":
+            effective_owner_id = None
+        else:
+            effective_scope = "private"
+            effective_owner_id = current_user["username"]
+
+    rows = list_rules(scope=effective_scope, owner_id=effective_owner_id, keyword=keyword)
     return [
         RuleOut(
             rule_id=row.rule_id,
@@ -36,9 +72,11 @@ def get_rules(
 
 
 @router.post("", response_model=RuleOut)
-def post_rule(req: CreateRuleReq):
+def post_rule(req: CreateRuleReq, current_user: dict = Depends(require_authenticated)):
+    owner_id = _assert_can_write_rule(req.scope, req.owner_id, current_user)
+    rule_id = f"rule_{uuid.uuid4().hex[:12]}"
     rule = KnowledgeRule(
-        rule_id=f"rule_{uuid.uuid4().hex[:12]}",
+        rule_id=rule_id,
         scope=req.scope,
         kind=req.kind,
         title=req.title,
@@ -47,10 +85,10 @@ def post_rule(req: CreateRuleReq):
         pattern=req.pattern,
         replacement=req.replacement,
         reason=req.reason,
-        evidence=req.evidence,
+        evidence=_build_rule_evidence(req.scope, owner_id, rule_id),
         enabled=req.enabled,
     )
-    record = create_rule(rule=rule, owner_id=req.owner_id)
+    record = create_rule(rule=rule, owner_id=owner_id)
     return RuleOut(
         rule_id=record.rule_id,
         scope=record.scope,
@@ -68,12 +106,26 @@ def post_rule(req: CreateRuleReq):
 
 
 @router.patch("/{rule_id}", response_model=RuleOut)
-def patch_rule(rule_id: str, req: UpdateRuleReq, owner_id: str | None = Query(default=None)):
+def patch_rule(
+    rule_id: str,
+    req: UpdateRuleReq,
+    owner_id: str | None = Query(default=None),
+    current_user: dict = Depends(require_authenticated),
+):
     updates = req.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="no updates provided")
+    updates.pop("evidence", None)
 
-    record = update_rule(rule_id=rule_id, owner_id=owner_id, **updates)
+    lookup_owner_id = owner_id if _is_admin(current_user) else current_user["username"]
+    existing = list_rules(owner_id=lookup_owner_id, keyword=rule_id)
+    existing = [rule for rule in existing if rule.rule_id == rule_id]
+    if not existing:
+        raise HTTPException(status_code=404, detail="rule not found")
+    current_scope = existing[0].scope
+    _assert_can_write_rule(updates.get("scope", current_scope), lookup_owner_id, current_user)
+
+    record = update_rule(rule_id=rule_id, owner_id=lookup_owner_id, **updates)
     if record is None:
         raise HTTPException(status_code=404, detail="rule not found")
 
@@ -94,8 +146,19 @@ def patch_rule(rule_id: str, req: UpdateRuleReq, owner_id: str | None = Query(de
 
 
 @router.delete("/{rule_id}")
-def remove_rule(rule_id: str, owner_id: str | None = Query(default=None)):
-    deleted = delete_rule(rule_id=rule_id, owner_id=owner_id)
+def remove_rule(
+    rule_id: str,
+    owner_id: str | None = Query(default=None),
+    current_user: dict = Depends(require_authenticated),
+):
+    lookup_owner_id = owner_id if _is_admin(current_user) else current_user["username"]
+    existing = list_rules(owner_id=lookup_owner_id, keyword=rule_id)
+    existing = [rule for rule in existing if rule.rule_id == rule_id]
+    if not existing:
+        raise HTTPException(status_code=404, detail="rule not found")
+    _assert_can_write_rule(existing[0].scope, lookup_owner_id, current_user)
+
+    deleted = delete_rule(rule_id=rule_id, owner_id=lookup_owner_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="rule not found")
     return {"ok": True}
