@@ -6,6 +6,13 @@ language: zh-CN
 [规则包]
 {rule_pack}
 
+[规则包说明]
+- 规则包只作为背景知识。
+- 规则包中的硬规则已经由后端规则引擎执行。
+- 不要重复输出规则包可以直接命中的问题。
+- 如果问题等价于规则包中的术语替换、正则脱敏或模板章节缺失规则，请不要输出。
+- 你只需要补充规则无法直接覆盖的语义、逻辑、表达和上下文问题。
+
 [待检查文本分片]
 {chunk_text}
 
@@ -15,7 +22,7 @@ language: zh-CN
 {{
   "issues": []
 }}
-- 若发现问题，issues 中每一项必须严格符合以下 schema：
+- 若发现问题，`issues` 中每一项必须严格符合以下结构：
 {{
   "severity": "P0|P1|P2",
   "category": "spelling|grammar|punctuation|style|terminology|compliance|structure|logic",
@@ -25,15 +32,25 @@ language: zh-CN
   "reason": "string",
   "evidence": "string",
   "confidence": 0.0,
-  "source": "llm"
+  "source": "llm",
+  "position_start": 0,
+  "position_end": 0
 }}
 
+[位置字段要求]
+1. `position_start` 和 `position_end` 必须尽量填写。
+2. 位置以当前“待检查文本分片”为基准，不是全文位置。
+3. `position_start` 是 `original_text` 在当前分片中的 0 基起始字符下标。
+4. `position_end` 是结束字符下标，采用左闭右开区间。
+5. 示例：如果分片是 `请登录OA系统`，`original_text` 是 `登录`，则 `position_start` 为 1，`position_end` 为 3。
+6. 如果无法准确定位，`position_start` 和 `position_end` 都返回 null。
+
 [判定原则]
-1) 只输出“确定存在”的问题；不确定则不输出。
-2) original_text 必须可在“待检查文本分片”中定位。
-3) suggested_text 必须是可直接替换的文本，且不改变原意。
-4) confidence 取值范围为 0~1。
-5) 无问题时必须返回：{{"issues":[]}}
+1. 只输出“确定存在”的问题；不确定则不输出。
+2. `original_text` 必须可在“待检查文本分片”中定位。
+3. `suggested_text` 必须是可直接替换的文本，且不改变原意。
+4. `confidence` 取值范围为 0~1。
+5. 无问题时必须返回：{{"issues":[]}}
 
 [再次强调]
 不要输出任何额外文字；不要输出 Markdown；只输出 JSON。

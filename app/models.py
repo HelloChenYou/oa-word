@@ -40,6 +40,8 @@ class ProofreadIssue(Base):
     evidence: Mapped[str] = mapped_column(Text)
     confidence: Mapped[float] = mapped_column(Float)
     source: Mapped[str] = mapped_column(String(16))
+    position_start: Mapped[int] = mapped_column(Integer)
+    position_end: Mapped[int] = mapped_column(Integer)
 
 
 class Template(Base):

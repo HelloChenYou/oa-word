@@ -24,6 +24,8 @@ export type Issue = {
   evidence: string;
   confidence: number;
   source: string;
+  position_start?: number | null;
+  position_end?: number | null;
 };
 
 export type TaskResult = {

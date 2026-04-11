@@ -37,4 +37,6 @@ def from_issue_record(row) -> StoredIssue:
         evidence=row.evidence,
         confidence=row.confidence,
         source=row.source,
+        position_start=getattr(row, "position_start", None),
+        position_end=getattr(row, "position_end", None),
     )

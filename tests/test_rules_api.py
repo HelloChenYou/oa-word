@@ -73,6 +73,7 @@ def test_create_rule_returns_created_record(monkeypatch):
             enabled=rule.enabled,
         )
 
+    monkeypatch.setattr(rules_router_module, "list_rules", lambda scope=None, owner_id=None, keyword=None: [])
     monkeypatch.setattr(rules_router_module, "create_rule", fake_create_rule)
     client = build_client()
     response = client.post(

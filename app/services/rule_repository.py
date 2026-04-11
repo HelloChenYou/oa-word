@@ -55,8 +55,22 @@ def seed_builtin_rules() -> None:
         existing_rule_ids = {
             row[0] for row in db.execute(select(KnowledgeRuleRecord.rule_id)).all()
         }
+        existing_rules = {
+            row.rule_id: row for row in db.execute(select(KnowledgeRuleRecord)).scalars().all()
+        }
         for rule in seed_rules:
             if rule.rule_id in existing_rule_ids:
+                record = existing_rules[rule.rule_id]
+                if record.evidence.startswith("knowledge:"):
+                    record.scope = rule.scope
+                    record.kind = rule.kind
+                    record.title = rule.title
+                    record.severity = rule.severity
+                    record.category = rule.category
+                    record.pattern = rule.pattern
+                    record.replacement = rule.replacement
+                    record.reason = rule.reason
+                    record.evidence = rule.evidence
                 continue
             owner_id = None
             if rule.scope == "private":

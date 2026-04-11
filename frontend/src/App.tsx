@@ -1015,9 +1015,10 @@ function App() {
                       <th>严重级别</th>
                       <th>类别</th>
                       <th>标题</th>
-                      <th>原文</th>
-                      <th>建议</th>
-                      <th>来源</th>
+                        <th>原文</th>
+                        <th>建议</th>
+                        <th>位置</th>
+                        <th>来源</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1028,6 +1029,11 @@ function App() {
                         <td>{issue.title}</td>
                         <td>{issue.original_text}</td>
                         <td>{issue.suggested_text}</td>
+                        <td>
+                          {issue.position_start == null || issue.position_end == null
+                            ? "-"
+                            : `${issue.position_start}-${issue.position_end}`}
+                        </td>
                         <td>{issue.source}</td>
                       </tr>
                     ))}

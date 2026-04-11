@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 Severity = Literal["P0", "P1", "P2"]
@@ -22,10 +22,14 @@ class BaseIssue(BaseModel):
     evidence: str
     confidence: float
     source: IssueSource
+    position_start: int | None = Field(default=None, ge=0)
+    position_end: int | None = Field(default=None, ge=0)
 
 
 class LlmIssue(BaseIssue):
     source: Literal["llm"]
+    position_start: int | None = Field(..., ge=0)
+    position_end: int | None = Field(..., ge=0)
 
 
 class RuleIssue(BaseIssue):
