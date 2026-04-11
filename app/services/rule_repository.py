@@ -159,6 +159,30 @@ def create_rule(rule: KnowledgeRule, owner_id: str | None = None):
         db.close()
 
 
+def update_rule(rule_id: str, owner_id: str | None = None, **updates):
+    db = SessionLocal()
+    try:
+        from app.models import KnowledgeRuleRecord
+
+        stmt = select(KnowledgeRuleRecord).where(KnowledgeRuleRecord.rule_id == rule_id)
+        if owner_id is not None:
+            stmt = stmt.where(KnowledgeRuleRecord.owner_id == owner_id)
+        record = db.execute(stmt).scalar_one_or_none()
+        if record is None:
+            return None
+
+        for field, value in updates.items():
+            if value is None or not hasattr(record, field):
+                continue
+            setattr(record, field, value)
+
+        db.commit()
+        db.refresh(record)
+        return record
+    finally:
+        db.close()
+
+
 def delete_rule(rule_id: str, owner_id: str | None = None) -> bool:
     db = SessionLocal()
     try:

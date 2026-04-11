@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from app.config import settings
 from app.domain.issues import LlmIssuesResp, StoredIssue
-from app.logging_utils import get_logger
+from app.logging_utils import elapsed_ms, get_logger, log_exception, log_info, log_warning, now_perf
 from app.services.issue_converter import validate_llm_response
 
 
@@ -113,6 +113,7 @@ def _extract_response_content(data: dict) -> str:
 
 
 async def _call_llm_chat(messages: list[dict], attempt: int) -> str | None:
+    started_at = now_perf()
     payload = _build_payload(messages)
     headers = _build_headers()
     url = _build_request_url()
@@ -131,13 +132,13 @@ async def _call_llm_chat(messages: list[dict], attempt: int) -> str | None:
     else:
         debug_payload["format"] = payload["format"]
 
-    print("--------------------------------", flush=True)
-    logger.info(
-        "[LLM_REQUEST] attempt=%s provider=%s url=%s payload=%s",
-        attempt,
-        provider,
-        url,
-        json.dumps(debug_payload, ensure_ascii=False),
+    log_info(
+        logger,
+        "llm_request_started",
+        attempt=attempt,
+        provider=provider,
+        url=url,
+        payload=debug_payload,
     )
 
     try:
@@ -145,47 +146,63 @@ async def _call_llm_chat(messages: list[dict], attempt: int) -> str | None:
             response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
-            logger.info(
-                "[LLM_RESPONSE] attempt=%s status=%s body=%s",
-                attempt,
-                response.status_code,
-                _truncate_text(response.text, max_len=2000),
+            log_info(
+                logger,
+                "llm_response_received",
+                attempt=attempt,
+                status_code=response.status_code,
+                duration_ms=elapsed_ms(started_at),
+                body=_truncate_text(response.text, max_len=2000),
             )
             raw_content = _extract_response_content(data)
-            logger.info(
-                "[LLM_RESPONSE_CONTENT] attempt=%s content=%s",
-                attempt,
-                _truncate_text(raw_content, max_len=2000),
+            log_info(
+                logger,
+                "llm_response_content",
+                attempt=attempt,
+                content=_truncate_text(raw_content, max_len=2000),
             )
             return raw_content
     except httpx.TimeoutException as exc:
-        logger.warning(
-            "[LLM_TIMEOUT] attempt=%s exc=%r timeout=%ss url=%s",
-            attempt,
-            exc,
-            settings.default_timeout_sec,
-            url,
+        log_warning(
+            logger,
+            "llm_timeout",
+            attempt=attempt,
+            timeout_sec=settings.default_timeout_sec,
+            url=url,
+            duration_ms=elapsed_ms(started_at),
+            error=repr(exc),
         )
-        logger.info("[LLM_REQUEST_END] status=failed(timeout)")
         return None
     except httpx.ConnectError as exc:
-        logger.warning("[LLM_CONNECT_ERROR] attempt=%s exc=%r url=%s", attempt, exc, url)
-        logger.info("[LLM_REQUEST_END] status=failed(connect_error)")
+        log_warning(
+            logger,
+            "llm_connect_error",
+            attempt=attempt,
+            url=url,
+            duration_ms=elapsed_ms(started_at),
+            error=repr(exc),
+        )
         return None
     except httpx.HTTPStatusError as exc:
         response_text = exc.response.text if exc.response is not None else ""
-        logger.warning(
-            "[LLM_HTTP_ERROR] attempt=%s status=%s exc=%r body=%s",
-            attempt,
-            getattr(exc.response, "status_code", "unknown"),
-            exc,
-            _truncate_text(response_text, max_len=2000),
+        log_warning(
+            logger,
+            "llm_http_error",
+            attempt=attempt,
+            status_code=getattr(exc.response, "status_code", "unknown"),
+            duration_ms=elapsed_ms(started_at),
+            body=_truncate_text(response_text, max_len=2000),
+            error=repr(exc),
         )
-        logger.info("[LLM_REQUEST_END] status=failed(http_error)")
         return None
     except Exception as exc:
-        logger.exception("[LLM_UNKNOWN_ERROR] attempt=%s url=%s", attempt, url)
-        logger.info("[LLM_REQUEST_END] status=failed(unknown_error)")
+        log_exception(
+            logger,
+            "llm_unknown_error",
+            attempt=attempt,
+            url=url,
+            duration_ms=elapsed_ms(started_at),
+        )
         return None
 
 
@@ -200,19 +217,22 @@ async def check_with_llm(chunk: str, mode: str, scene: str, rule_pack: str = "{}
     ]
     content = await _call_llm_chat(messages=messages_first, attempt=1)
     if content is None:
+        log_warning(logger, "llm_request_finished", status="failed_first_attempt")
         return []
 
     try:
         issues = _validate_response(content)
-        logger.info("[LLM_SCHEMA_VALID] attempt=1 count=%s", len(issues))
-        logger.info("[LLM_REQUEST_END] status=ok")
+        log_info(logger, "llm_schema_valid", attempt=1, issue_count=len(issues))
+        log_info(logger, "llm_request_finished", status="ok")
         return issues
     except ValidationError as exc:
         validation_error = exc.json()
-        logger.warning(
-            "[LLM_SCHEMA_ERROR] attempt=1 error=%s content=%s",
-            _truncate_text(validation_error, max_len=2000),
-            _truncate_text(content, max_len=2000),
+        log_warning(
+            logger,
+            "llm_schema_error",
+            attempt=1,
+            validation_error=_truncate_text(validation_error, max_len=2000),
+            content=_truncate_text(content, max_len=2000),
         )
 
     retry_messages = [
@@ -231,20 +251,22 @@ async def check_with_llm(chunk: str, mode: str, scene: str, rule_pack: str = "{}
     ]
     retry_content = await _call_llm_chat(messages=retry_messages, attempt=2)
     if retry_content is None:
-        logger.info("[LLM_REQUEST_END] status=failed(retry_request_error)")
+        log_warning(logger, "llm_request_finished", status="failed_retry_request")
         return []
 
     try:
         retry_issues = _validate_response(retry_content)
-        logger.info("[LLM_SCHEMA_VALID] attempt=2 count=%s", len(retry_issues))
-        logger.info("[LLM_REQUEST_END] status=ok_after_retry")
+        log_info(logger, "llm_schema_valid", attempt=2, issue_count=len(retry_issues))
+        log_info(logger, "llm_request_finished", status="ok_after_retry")
         return retry_issues
     except ValidationError as exc:
-        logger.warning(
-            "[LLM_SCHEMA_ERROR] attempt=2 error=%s content=%s",
-            _truncate_text(exc.json(), max_len=2000),
-            _truncate_text(retry_content, max_len=2000),
+        log_warning(
+            logger,
+            "llm_schema_error",
+            attempt=2,
+            validation_error=_truncate_text(exc.json(), max_len=2000),
+            content=_truncate_text(retry_content, max_len=2000),
         )
 
-    logger.info("[LLM_REQUEST_END] status=failed(schema_error_after_retry)")
+    log_warning(logger, "llm_request_finished", status="failed_schema_after_retry")
     return []

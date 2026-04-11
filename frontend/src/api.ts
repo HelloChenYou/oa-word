@@ -1,6 +1,18 @@
 import type { RuleItem, TaskResult, TemplateDetail, TemplateItem } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+const DEFAULT_ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN ?? "";
+
+function getAuthHeaders(): HeadersInit {
+  const token = window.localStorage.getItem("admin_api_token") || DEFAULT_ADMIN_TOKEN;
+  if (!token) {
+    return {};
+  }
+  return {
+    Authorization: `Bearer ${token}`,
+    "X-Admin-Token": token
+  };
+}
 
 async function parseJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -27,18 +39,23 @@ export async function uploadTemplate(input: {
 
   const res = await fetch(`${API_BASE}/api/v1/templates`, {
     method: "POST",
+    headers: getAuthHeaders(),
     body: form
   });
   return parseJson<{ template_id: string }>(res);
 }
 
 export async function listTemplates() {
-  const res = await fetch(`${API_BASE}/api/v1/templates`);
+  const res = await fetch(`${API_BASE}/api/v1/templates`, {
+    headers: getAuthHeaders()
+  });
   return parseJson<TemplateItem[]>(res);
 }
 
 export async function getTemplateDetail(templateId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/templates/${templateId}`);
+  const res = await fetch(`${API_BASE}/api/v1/templates/${templateId}`, {
+    headers: getAuthHeaders()
+  });
   return parseJson<TemplateDetail>(res);
 }
 
@@ -51,19 +68,23 @@ export async function createTask(input: {
 }) {
   const res = await fetch(`${API_BASE}/api/v1/proofread/tasks`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify(input)
   });
   return parseJson<{ task_id: string; status: string }>(res);
 }
 
 export async function getTaskStatus(taskId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/proofread/tasks/${taskId}`);
+  const res = await fetch(`${API_BASE}/api/v1/proofread/tasks/${taskId}`, {
+    headers: getAuthHeaders()
+  });
   return parseJson<{ task_id: string; status: string }>(res);
 }
 
 export async function getTaskResult(taskId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/proofread/tasks/${taskId}/result`);
+  const res = await fetch(`${API_BASE}/api/v1/proofread/tasks/${taskId}/result`, {
+    headers: getAuthHeaders()
+  });
   return parseJson<TaskResult>(res);
 }
 
@@ -72,7 +93,9 @@ export async function listRules(input?: { scope?: string; ownerId?: string }) {
   if (input?.scope) params.set("scope", input.scope);
   if (input?.ownerId) params.set("owner_id", input.ownerId);
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  const res = await fetch(`${API_BASE}/api/v1/rules${suffix}`);
+  const res = await fetch(`${API_BASE}/api/v1/rules${suffix}`, {
+    headers: getAuthHeaders()
+  });
   return parseJson<RuleItem[]>(res);
 }
 
@@ -91,7 +114,34 @@ export async function createRule(input: {
 }) {
   const res = await fetch(`${API_BASE}/api/v1/rules`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(input)
+  });
+  return parseJson<RuleItem>(res);
+}
+
+export async function updateRule(
+  ruleId: string,
+  input: {
+    scope?: string;
+    kind?: string;
+    title?: string;
+    severity?: string;
+    category?: string;
+    pattern?: string;
+    replacement?: string;
+    reason?: string;
+    evidence?: string;
+    enabled?: boolean;
+  },
+  ownerId?: string
+) {
+  const params = new URLSearchParams();
+  if (ownerId) params.set("owner_id", ownerId);
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_BASE}/api/v1/rules/${ruleId}${suffix}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify(input)
   });
   return parseJson<RuleItem>(res);
@@ -102,7 +152,8 @@ export async function deleteRule(ruleId: string, ownerId?: string) {
   if (ownerId) params.set("owner_id", ownerId);
   const suffix = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(`${API_BASE}/api/v1/rules/${ruleId}${suffix}`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers: getAuthHeaders()
   });
   return parseJson<{ ok: boolean }>(res);
 }

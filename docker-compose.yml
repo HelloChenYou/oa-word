@@ -1,6 +1,19 @@
-version: "3.9"
-
 services:
+  migrate:
+    image: python:3.11-slim
+    container_name: proofread-migrate
+    command: sh -c "pip install -r requirements.txt && alembic upgrade head"
+    environment:
+      - TZ=Asia/Shanghai
+    env_file:
+      - .env
+    volumes:
+      - ./:/workspace
+    working_dir: /workspace
+    depends_on:
+      - postgres
+    restart: "no"
+
   frontend:
     build:
       context: ./frontend
@@ -27,8 +40,10 @@ services:
       - ./:/workspace
     working_dir: /workspace
     depends_on:
-      - postgres
-      - redis
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
 
   worker:
     image: python:3.11-slim
@@ -42,8 +57,10 @@ services:
       - ./:/workspace
     working_dir: /workspace
     depends_on:
-      - postgres
-      - redis
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
 
   postgres:
     image: postgres:16

@@ -7,11 +7,12 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import SessionLocal
 from app.models import ProofreadIssue, ProofreadTask, Template
-from app.queue import get_queue, get_redis_conn
+from app.queue import enqueue_proofread_task, get_redis_conn
 from app.schemas import (
     CreateTaskReq,
     CreateTaskResp,
     IssueOut,
+    RetryTaskResp,
     TaskResultResp,
     TaskStatusResp,
 )
@@ -46,21 +47,17 @@ async def create_task(req: CreateTaskReq, request: Request, db: Session = Depend
         id=task_id,
         mode=req.mode,
         scene=req.scene,
+        owner_id=req.owner_id,
         template_id=req.template_id,
         status="queued",
         source_text=req.text,
+        failure_reason="",
+        retry_count=0,
+        max_retries=settings.task_max_retries,
     )
     db.add(task)
     db.commit()
-    queue = get_queue()
-    queue.enqueue(
-        "app.worker_tasks.process_proofread_task",
-        task_id,
-        req.owner_id,
-        job_id=task_id,
-        job_timeout=settings.effective_rq_job_timeout_sec,
-        result_ttl=settings.rq_result_ttl_sec,
-    )
+    enqueue_proofread_task(task_id, req.owner_id, attempt=0)
     return CreateTaskResp(task_id=task_id, status="queued")
 
 
@@ -69,7 +66,37 @@ def get_task(task_id: str, db: Session = Depends(get_db)):
     task = db.get(ProofreadTask, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="task not found")
-    return TaskStatusResp(task_id=task_id, status=task.status)
+    return TaskStatusResp(
+        task_id=task_id,
+        status=task.status,
+        retry_count=task.retry_count,
+        max_retries=task.max_retries,
+        failure_reason=task.failure_reason or "",
+        error_msg=task.error_msg or "",
+    )
+
+
+@router.post("/tasks/{task_id}/retry", response_model=RetryTaskResp)
+def retry_task(task_id: str, db: Session = Depends(get_db)):
+    task = db.get(ProofreadTask, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task not found")
+    if task.status in {"queued", "running", "retrying"}:
+        raise HTTPException(status_code=409, detail="task is already in progress")
+
+    task.status = "queued"
+    task.error_msg = ""
+    task.failure_reason = ""
+    task.finished_at = None
+    db.commit()
+
+    enqueue_proofread_task(task_id, task.owner_id, attempt=task.retry_count + 1)
+    return RetryTaskResp(
+        task_id=task_id,
+        status=task.status,
+        retry_count=task.retry_count,
+        max_retries=task.max_retries,
+    )
 
 
 @router.get("/tasks/{task_id}/result", response_model=TaskResultResp)

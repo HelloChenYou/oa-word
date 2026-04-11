@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -13,13 +12,18 @@ class ProofreadTask(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     mode: Mapped[str] = mapped_column(String(16))
     scene: Mapped[str] = mapped_column(String(32))
-    template_id: Mapped[Optional[str]] = mapped_column(ForeignKey("templates.id"), nullable=True)
+    owner_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    template_id: Mapped[str | None] = mapped_column(ForeignKey("templates.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(16))
     source_text: Mapped[str] = mapped_column(Text)
     model_name: Mapped[str] = mapped_column(String(64), default="")
     error_msg: Mapped[str] = mapped_column(Text, default="")
+    failure_reason: Mapped[str] = mapped_column(String(64), default="")
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_error_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class ProofreadIssue(Base):
@@ -57,7 +61,7 @@ class KnowledgeRuleRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     rule_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     scope: Mapped[str] = mapped_column(String(16), index=True)
-    owner_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    owner_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     kind: Mapped[str] = mapped_column(String(32))
     title: Mapped[str] = mapped_column(String(255))
     severity: Mapped[str] = mapped_column(String(4))

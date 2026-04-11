@@ -26,6 +26,17 @@ class CreateTaskResp(BaseModel):
 class TaskStatusResp(BaseModel):
     task_id: str
     status: str
+    retry_count: int = 0
+    max_retries: int = 0
+    failure_reason: str = ""
+    error_msg: str = ""
+
+
+class RetryTaskResp(BaseModel):
+    task_id: str
+    status: str
+    retry_count: int
+    max_retries: int
 
 
 class IssueOut(StoredIssue):
@@ -77,6 +88,19 @@ class CreateRuleReq(BaseModel):
     reason: str
     evidence: str
     enabled: bool = True
+
+
+class UpdateRuleReq(BaseModel):
+    scope: RuleScope | None = None
+    kind: str | None = None
+    title: str | None = None
+    severity: str | None = None
+    category: str | None = None
+    pattern: str | None = None
+    replacement: str | None = None
+    reason: str | None = None
+    evidence: str | None = None
+    enabled: bool | None = None
 
 
 class RuleOut(KnowledgeRule):

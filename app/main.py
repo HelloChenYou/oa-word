@@ -1,20 +1,62 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from app.db import Base, engine
+from app.config import settings, validate_runtime_settings
 from app.logging_utils import configure_logging
+from app.routers.ops import router as ops_router
 from app.routers.rules import router as rules_router
 from app.routers.tasks import router as tasks_router
 from app.routers.templates import router as templates_router
+from app.security import require_admin
 from app.services.rule_repository import seed_builtin_rules
 
 configure_logging()
-Base.metadata.create_all(bind=engine)
+validate_runtime_settings()
 seed_builtin_rules()
 
 app = FastAPI(title="Proofread MVP", version="0.1.0")
-app.include_router(rules_router)
-app.include_router(tasks_router)
-app.include_router(templates_router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allow_origins_list,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+@app.middleware("http")
+async def access_log_middleware(request, call_next):
+    from app.logging_utils import elapsed_ms, get_logger, log_exception, log_info, now_perf
+
+    request_logger = get_logger("app.access")
+    started_at = now_perf()
+    client_host = request.client.host if request.client else "unknown"
+    try:
+        response = await call_next(request)
+    except Exception:
+        log_exception(
+            request_logger,
+            "http_request_failed",
+            method=request.method,
+            path=request.url.path,
+            client_ip=client_host,
+            duration_ms=elapsed_ms(started_at),
+        )
+        raise
+
+    log_info(
+        request_logger,
+        "http_request_completed",
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        client_ip=client_host,
+        duration_ms=elapsed_ms(started_at),
+    )
+    return response
+
+app.include_router(rules_router, dependencies=[Depends(require_admin)])
+app.include_router(tasks_router, dependencies=[Depends(require_admin)])
+app.include_router(templates_router, dependencies=[Depends(require_admin)])
+app.include_router(ops_router, dependencies=[Depends(require_admin)])
 
 
 @app.get("/healthz")

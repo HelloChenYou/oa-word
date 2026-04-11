@@ -1,7 +1,7 @@
 import asyncio
 
 from app.domain.issues import StoredIssue
-from app.logging_utils import get_logger
+from app.logging_utils import elapsed_ms, get_logger, log_info, now_perf
 from app.services.boundary_guard import clamp_issues
 from app.services.chunker import split_text
 from app.services.llm_ollama import check_with_llm
@@ -18,35 +18,49 @@ def _build_rule_pack(owner_id: str | None, template_rule_pack: str = "{}") -> st
 
 
 async def run_proofread(text: str, mode: str, scene: str, owner_id: str | None = None) -> list[StoredIssue]:
+    started_at = now_perf()
     chunks = split_text(text)
     all_issues: list[StoredIssue] = []
     total_rule = 0
     total_llm = 0
     llm_rule_pack = _build_rule_pack(owner_id=owner_id)
+    log_info(
+        logger,
+        "proofread_started",
+        mode=mode,
+        scene=scene,
+        owner_id=owner_id,
+        chunk_count=len(chunks),
+        text_length=len(text),
+        has_template=False,
+    )
 
     for idx, chunk in enumerate(chunks):
         rule_issues = check_rules(chunk, owner_id=owner_id)
         llm_issues = await check_with_llm(chunk, mode=mode, scene=scene, rule_pack=llm_rule_pack)
         total_rule += len(rule_issues)
         total_llm += len(llm_issues)
-        logger.info(
-            "[CHUNK_ISSUES] idx=%s rule=%s llm=%s chunk_len=%s",
-            idx,
-            len(rule_issues),
-            len(llm_issues),
-            len(chunk),
+        log_info(
+            logger,
+            "chunk_processed",
+            chunk_index=idx,
+            rule_issue_count=len(rule_issues),
+            llm_issue_count=len(llm_issues),
+            chunk_length=len(chunk),
         )
         all_issues.extend(rule_issues + llm_issues)
 
     deduped_issues = dedup_issues(all_issues)
     clamped_issues = clamp_issues(deduped_issues)
-    logger.info(
-        "[FINAL_ISSUES] rule_total=%s llm_total=%s before_dedup=%s after_dedup=%s after_clamp=%s",
-        total_rule,
-        total_llm,
-        len(all_issues),
-        len(deduped_issues),
-        len(clamped_issues),
+    log_info(
+        logger,
+        "proofread_completed",
+        rule_issue_total=total_rule,
+        llm_issue_total=total_llm,
+        before_dedup_count=len(all_issues),
+        after_dedup_count=len(deduped_issues),
+        after_clamp_count=len(clamped_issues),
+        duration_ms=elapsed_ms(started_at),
     )
     return clamped_issues
 
@@ -62,35 +76,49 @@ async def run_proofread_with_template(
     template_rule_pack: str,
     owner_id: str | None = None,
 ) -> list[StoredIssue]:
+    started_at = now_perf()
     chunks = split_text(text)
     all_issues: list[StoredIssue] = []
     total_rule = 0
     total_llm = 0
     llm_rule_pack = _build_rule_pack(owner_id=owner_id, template_rule_pack=template_rule_pack)
+    log_info(
+        logger,
+        "proofread_started",
+        mode=mode,
+        scene=scene,
+        owner_id=owner_id,
+        chunk_count=len(chunks),
+        text_length=len(text),
+        has_template=True,
+    )
 
     for idx, chunk in enumerate(chunks):
         rule_issues = check_rules(chunk, owner_id=owner_id, template_rule_pack=template_rule_pack)
         llm_issues = await check_with_llm(chunk, mode=mode, scene=scene, rule_pack=llm_rule_pack)
         total_rule += len(rule_issues)
         total_llm += len(llm_issues)
-        logger.info(
-            "[CHUNK_ISSUES] idx=%s rule=%s llm=%s chunk_len=%s",
-            idx,
-            len(rule_issues),
-            len(llm_issues),
-            len(chunk),
+        log_info(
+            logger,
+            "chunk_processed",
+            chunk_index=idx,
+            rule_issue_count=len(rule_issues),
+            llm_issue_count=len(llm_issues),
+            chunk_length=len(chunk),
         )
         all_issues.extend(rule_issues + llm_issues)
 
     deduped_issues = dedup_issues(all_issues)
     clamped_issues = clamp_issues(deduped_issues)
-    logger.info(
-        "[FINAL_ISSUES] rule_total=%s llm_total=%s before_dedup=%s after_dedup=%s after_clamp=%s",
-        total_rule,
-        total_llm,
-        len(all_issues),
-        len(deduped_issues),
-        len(clamped_issues),
+    log_info(
+        logger,
+        "proofread_completed",
+        rule_issue_total=total_rule,
+        llm_issue_total=total_llm,
+        before_dedup_count=len(all_issues),
+        after_dedup_count=len(deduped_issues),
+        after_clamp_count=len(clamped_issues),
+        duration_ms=elapsed_ms(started_at),
     )
     return clamped_issues
 

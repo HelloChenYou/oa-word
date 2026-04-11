@@ -18,6 +18,21 @@ body {
   padding: 0 16px 40px;
 }
 
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.hero-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+}
+
 header h1 {
   margin: 0 0 6px;
 }
@@ -25,6 +40,29 @@ header h1 {
 header p {
   margin: 0 0 20px;
   color: #6b7280;
+}
+
+.topnav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nav-btn {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.nav-btn.active {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.auth-panel {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
 }
 
 .card {
@@ -45,11 +83,23 @@ header p {
   grid-column: 1 / -1;
 }
 
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 label {
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-size: 14px;
+}
+
+.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
 }
 
 input,
@@ -107,6 +157,12 @@ td {
   vertical-align: top;
 }
 
+.table-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .toast {
   position: fixed;
   right: 20px;
@@ -116,4 +172,29 @@ td {
   padding: 10px 12px;
   border-radius: 8px;
   max-width: 420px;
+}
+
+@media (max-width: 768px) {
+  .hero {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .hero-side {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .auth-panel {
+    align-items: stretch;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

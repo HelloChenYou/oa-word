@@ -6,6 +6,8 @@ class Settings(BaseSettings):
 
     app_env: str = "dev"
     app_port: int = 8080
+    admin_api_token: str | None = None
+    cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     database_url: str = "postgresql+psycopg://proofread:proofread@localhost:5432/proofread"
     redis_url: str = "redis://localhost:6379/0"
@@ -26,6 +28,8 @@ class Settings(BaseSettings):
     submit_rate_limit_window_sec: int = 60
     submit_rate_limit_max_requests: int = 10
     max_error_msg_chars: int = 2000
+    task_max_retries: int = 1
+    retryable_task_error_types: str = "timeout,llm_http_error,unknown_error"
 
     @property
     def effective_rq_job_timeout_sec(self) -> int:
@@ -38,6 +42,14 @@ class Settings(BaseSettings):
         return bool(self.llm_api_key and self.effective_llm_base_url and self.effective_llm_model)
 
     @property
+    def admin_auth_enabled(self) -> bool:
+        return bool(self.admin_api_token and self.admin_api_token.strip())
+
+    @property
+    def cors_allow_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
+
+    @property
     def effective_llm_base_url(self) -> str:
         return (self.llm_base_url or self.ollama_base_url).rstrip("/")
 
@@ -45,5 +57,16 @@ class Settings(BaseSettings):
     def effective_llm_model(self) -> str:
         return self.llm_model or self.ollama_model
 
+    @property
+    def retryable_task_error_types_set(self) -> set[str]:
+        return {item.strip() for item in self.retryable_task_error_types.split(",") if item.strip()}
+
 
 settings = Settings()
+
+
+def validate_runtime_settings() -> None:
+    if settings.app_env.lower() == "prod" and not settings.admin_auth_enabled:
+        raise RuntimeError("ADMIN_API_TOKEN must be configured when APP_ENV=prod")
+    if not settings.cors_allow_origins_list:
+        raise RuntimeError("CORS_ALLOW_ORIGINS must contain at least one origin")

@@ -3,8 +3,8 @@ import uuid
 from fastapi import APIRouter, HTTPException, Query
 
 from app.domain.rules import KnowledgeRule
-from app.schemas import CreateRuleReq, RuleOut
-from app.services.rule_repository import create_rule, delete_rule, list_rules
+from app.schemas import CreateRuleReq, RuleOut, UpdateRuleReq
+from app.services.rule_repository import create_rule, delete_rule, list_rules, update_rule
 
 
 router = APIRouter(prefix="/api/v1/rules", tags=["rules"])
@@ -51,6 +51,32 @@ def post_rule(req: CreateRuleReq):
         enabled=req.enabled,
     )
     record = create_rule(rule=rule, owner_id=req.owner_id)
+    return RuleOut(
+        rule_id=record.rule_id,
+        scope=record.scope,
+        owner_id=record.owner_id,
+        kind=record.kind,
+        title=record.title,
+        severity=record.severity,
+        category=record.category,
+        pattern=record.pattern,
+        replacement=record.replacement,
+        reason=record.reason,
+        evidence=record.evidence,
+        enabled=record.enabled,
+    )
+
+
+@router.patch("/{rule_id}", response_model=RuleOut)
+def patch_rule(rule_id: str, req: UpdateRuleReq, owner_id: str | None = Query(default=None)):
+    updates = req.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="no updates provided")
+
+    record = update_rule(rule_id=rule_id, owner_id=owner_id, **updates)
+    if record is None:
+        raise HTTPException(status_code=404, detail="rule not found")
+
     return RuleOut(
         rule_id=record.rule_id,
         scope=record.scope,
