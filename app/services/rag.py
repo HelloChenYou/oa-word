@@ -49,6 +49,25 @@ def _split_long_chunk(text: str, max_chars: int) -> list[str]:
 def replace_document_chunks(db: Session, document_id: str, raw_text: str) -> int:
     db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.document_id == document_id))
     chunks = split_knowledge_text(raw_text)
+    db.flush()
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        for index, content in enumerate(chunks):
+            db.execute(
+                text(
+                    """
+                    INSERT INTO knowledge_chunks (document_id, chunk_index, content, embedding, created_at)
+                    VALUES (:document_id, :chunk_index, :content, CAST(:embedding AS vector), now())
+                    """
+                ),
+                {
+                    "document_id": document_id,
+                    "chunk_index": index,
+                    "content": content,
+                    "embedding": vector_to_pg(build_embedding(content)),
+                },
+            )
+        return len(chunks)
+
     for index, content in enumerate(chunks):
         db.add(
             KnowledgeChunk(
