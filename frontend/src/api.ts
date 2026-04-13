@@ -1,4 +1,4 @@
-import type { AuthUser, RuleItem, TaskResult, TemplateDetail, TemplateItem, UserItem } from "./types";
+import type { AuthUser, KnowledgeDetail, KnowledgeItem, RuleItem, TaskResult, TemplateDetail, TemplateItem, UserItem } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 const DEFAULT_ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN ?? "";
@@ -63,6 +63,67 @@ export async function getTemplateDetail(templateId: string) {
     headers: getAuthHeaders()
   });
   return parseJson<TemplateDetail>(res);
+}
+
+export async function uploadKnowledge(input: {
+  name: string;
+  docType: string;
+  file: File;
+}) {
+  const form = new FormData();
+  form.append("name", input.name);
+  form.append("doc_type", input.docType);
+  form.append("file", input.file);
+
+  const res = await fetch(`${API_BASE}/api/v1/knowledge`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: form
+  });
+  return parseJson<{ document_id: string; name: string; doc_type: string; file_type: string; chunk_count: number }>(res);
+}
+
+export async function listKnowledge(input?: { keyword?: string; enabled?: boolean }) {
+  const params = new URLSearchParams();
+  if (input?.keyword) params.set("keyword", input.keyword);
+  if (input?.enabled !== undefined) params.set("enabled", String(input.enabled));
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_BASE}/api/v1/knowledge${suffix}`, {
+    headers: getAuthHeaders()
+  });
+  return parseJson<KnowledgeItem[]>(res);
+}
+
+export async function getKnowledgeDetail(documentId: string) {
+  const res = await fetch(`${API_BASE}/api/v1/knowledge/${documentId}`, {
+    headers: getAuthHeaders()
+  });
+  return parseJson<KnowledgeDetail>(res);
+}
+
+export async function updateKnowledge(
+  documentId: string,
+  input: {
+    name?: string;
+    doc_type?: string;
+    enabled?: boolean;
+    raw_text?: string;
+  }
+) {
+  const res = await fetch(`${API_BASE}/api/v1/knowledge/${documentId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(input)
+  });
+  return parseJson<KnowledgeDetail>(res);
+}
+
+export async function deleteKnowledge(documentId: string) {
+  const res = await fetch(`${API_BASE}/api/v1/knowledge/${documentId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders()
+  });
+  return parseJson<{ ok: boolean }>(res);
 }
 
 export async function createTask(input: {

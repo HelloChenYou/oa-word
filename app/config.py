@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     max_error_msg_chars: int = 2000
     task_max_retries: int = 1
     retryable_task_error_types: str = "timeout,llm_http_error,unknown_error"
+    rag_enabled: bool = True
+    rag_top_k: int = 3
+    rag_chunk_chars: int = 600
+    rag_retrieval_mode: str = "hybrid"
+    rag_vector_dim: int = 128
+    rag_vector_weight: float = 0.7
 
     @property
     def effective_rq_job_timeout_sec(self) -> int:

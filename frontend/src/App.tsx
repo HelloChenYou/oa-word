@@ -4,28 +4,33 @@ import {
   createRule,
   createTask,
   createUser,
+  deleteKnowledge,
   deleteRule,
   getCurrentUser,
+  getKnowledgeDetail,
   getTaskResult,
   getTaskStatus,
   getTemplateDetail,
+  listKnowledge,
   listRules,
   listTemplates,
   listUsers,
   login,
   resetUserPassword,
+  updateKnowledge,
   updateRule,
   updateUser,
+  uploadKnowledge,
   uploadTemplate
 } from "./api";
-import type { AuthUser, RuleItem, TaskResult, TemplateDetail, TemplateItem, UserItem } from "./types";
+import type { AuthUser, KnowledgeDetail, KnowledgeItem, RuleItem, TaskResult, TemplateDetail, TemplateItem, UserItem } from "./types";
 
-type SectionKey = "users" | "personalRules" | "publicRules" | "templates" | "tasks";
+type SectionKey = "users" | "personalRules" | "publicRules" | "templates" | "knowledge" | "tasks";
 type RuleScope = "private" | "public";
 type UserRole = "admin" | "operator";
 
 const ALL_SECTIONS: SectionKey[] = ["personalRules", "publicRules", "tasks"];
-const ADMIN_SECTIONS: SectionKey[] = ["users", "personalRules", "publicRules", "templates", "tasks"];
+const ADMIN_SECTIONS: SectionKey[] = ["users", "personalRules", "publicRules", "templates", "knowledge", "tasks"];
 
 function getInitialSection(): SectionKey {
   const hash = window.location.hash.replace("#", "");
@@ -75,6 +80,18 @@ function App() {
   const [templateDocType, setTemplateDocType] = useState("general");
   const [templateFile, setTemplateFile] = useState<File | null>(null);
 
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
+  const [knowledgeKeyword, setKnowledgeKeyword] = useState("");
+  const [knowledgeEnabledFilter, setKnowledgeEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
+  const [selectedKnowledge, setSelectedKnowledge] = useState<KnowledgeDetail | null>(null);
+  const [knowledgeName, setKnowledgeName] = useState("");
+  const [knowledgeDocType, setKnowledgeDocType] = useState("general");
+  const [knowledgeFile, setKnowledgeFile] = useState<File | null>(null);
+  const [knowledgeRawText, setKnowledgeRawText] = useState("");
+  const [editingKnowledgeId, setEditingKnowledgeId] = useState<string | null>(null);
+  const [knowledgeEnabled, setKnowledgeEnabled] = useState(true);
+  const [knowledgeModalOpen, setKnowledgeModalOpen] = useState(false);
+
   const [text, setText] = useState("请各部门登录OA系统，并上报员工手机号13800138000。");
   const [mode, setMode] = useState<"review" | "rewrite">("review");
   const [scene, setScene] = useState<"general" | "contract" | "announcement" | "tech_doc">("general");
@@ -90,6 +107,9 @@ function App() {
   const privateRuleCount = rules.filter((rule) => rule.scope === "private").length;
   const publicRuleCount = rules.filter((rule) => rule.scope === "public").length;
   const resultIssueCount = taskResult?.issues.length ?? 0;
+  const resultRagHitCount = taskResult?.rag_hits?.length ?? 0;
+  const enabledKnowledgeCount = knowledgeItems.filter((item) => item.enabled).length;
+  const knowledgeChunkCount = knowledgeItems.reduce((total, item) => total + item.chunk_count, 0);
 
   useEffect(() => {
     const onHashChange = () => setActiveSection(getInitialSection());
@@ -131,6 +151,7 @@ function App() {
     }
     void loadUsers();
     void loadTemplates();
+    void loadKnowledge();
   }, [currentUser, isAdmin]);
 
   useEffect(() => {
@@ -149,6 +170,13 @@ function App() {
       .then(setSelectedTemplate)
       .catch((err) => setMessage(`读取模板详情失败: ${String(err)}`));
   }, [selectedTemplateId, currentUser, isAdmin]);
+
+  useEffect(() => {
+    if (!currentUser || !isAdmin) {
+      return;
+    }
+    void loadKnowledge();
+  }, [knowledgeKeyword, knowledgeEnabledFilter, currentUser, isAdmin]);
 
   const navigateTo = (section: SectionKey) => {
     if (!isAdmin && !ALL_SECTIONS.includes(section)) {
@@ -218,6 +246,41 @@ function App() {
     setRuleModalOpen(true);
   };
 
+  const resetKnowledgeForm = () => {
+    setEditingKnowledgeId(null);
+    setKnowledgeName("");
+    setKnowledgeDocType("general");
+    setKnowledgeFile(null);
+    setKnowledgeRawText("");
+    setKnowledgeEnabled(true);
+    setKnowledgeModalOpen(false);
+  };
+
+  const openCreateKnowledgeModal = () => {
+    resetKnowledgeForm();
+    setKnowledgeModalOpen(true);
+  };
+
+  const fillKnowledgeForm = async (item: KnowledgeItem) => {
+    setLoading(true);
+    setMessage("");
+    try {
+      const detail = await getKnowledgeDetail(item.document_id);
+      setSelectedKnowledge(detail);
+      setEditingKnowledgeId(detail.document_id);
+      setKnowledgeName(detail.name);
+      setKnowledgeDocType(detail.doc_type);
+      setKnowledgeRawText(detail.raw_text);
+      setKnowledgeEnabled(detail.enabled);
+      setKnowledgeFile(null);
+      setKnowledgeModalOpen(true);
+    } catch (err) {
+      setMessage(`读取知识库详情失败: ${String(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadUsers = async () => {
     try {
       setUsers(await listUsers());
@@ -246,6 +309,22 @@ function App() {
       setTemplates(await listTemplates());
     } catch (err) {
       setMessage(`加载模板失败: ${String(err)}`);
+    }
+  };
+
+  const loadKnowledge = async () => {
+    try {
+      setKnowledgeItems(
+        await listKnowledge({
+          keyword: knowledgeKeyword.trim() || undefined,
+          enabled:
+            knowledgeEnabledFilter === "all"
+              ? undefined
+              : knowledgeEnabledFilter === "enabled"
+        })
+      );
+    } catch (err) {
+      setMessage(`加载知识库失败: ${String(err)}`);
     }
   };
 
@@ -300,7 +379,9 @@ function App() {
     setUsers([]);
     setRules([]);
     setTemplates([]);
+    setKnowledgeItems([]);
     setSelectedTemplate(null);
+    setSelectedKnowledge(null);
     setTaskResult(null);
     setTaskId("");
     setTaskStatus("");
@@ -308,6 +389,7 @@ function App() {
     setNewPassword("");
     resetUserForm();
     resetRuleForm();
+    resetKnowledgeForm();
     setMessage("已退出登录。");
   };
 
@@ -438,6 +520,85 @@ function App() {
     if (file && !templateName.trim()) {
       const defaultName = file.name.replace(/\.[^/.]+$/, "");
       setTemplateName(defaultName || file.name);
+    }
+  };
+
+  const onKnowledgeFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setKnowledgeFile(file);
+    if (file && !knowledgeName.trim()) {
+      const defaultName = file.name.replace(/\.[^/.]+$/, "");
+      setKnowledgeName(defaultName || file.name);
+    }
+  };
+
+  const onSubmitKnowledge = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!knowledgeName.trim()) {
+      setMessage("请填写知识库名称。");
+      return;
+    }
+    if (!editingKnowledgeId && !knowledgeFile) {
+      setMessage("新增知识库时必须选择文件。");
+      return;
+    }
+    setLoading(true);
+    setMessage("");
+    try {
+      if (editingKnowledgeId) {
+        const updated = await updateKnowledge(editingKnowledgeId, {
+          name: knowledgeName.trim(),
+          doc_type: knowledgeDocType.trim(),
+          enabled: knowledgeEnabled,
+          raw_text: knowledgeRawText.trim()
+        });
+        setSelectedKnowledge(updated);
+        setMessage(`知识库已更新: ${updated.name}`);
+      } else if (knowledgeFile) {
+        const created = await uploadKnowledge({
+          name: knowledgeName.trim(),
+          docType: knowledgeDocType.trim(),
+          file: knowledgeFile
+        });
+        setMessage(`知识库上传成功: ${created.document_id}`);
+      }
+      resetKnowledgeForm();
+      await loadKnowledge();
+    } catch (err) {
+      setMessage(`知识库保存失败: ${String(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onToggleKnowledge = async (item: KnowledgeItem) => {
+    setLoading(true);
+    setMessage("");
+    try {
+      await updateKnowledge(item.document_id, { enabled: !item.enabled });
+      setMessage(`知识库状态已更新: ${item.name}`);
+      await loadKnowledge();
+    } catch (err) {
+      setMessage(`更新知识库状态失败: ${String(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onDeleteKnowledge = async (item: KnowledgeItem) => {
+    setLoading(true);
+    setMessage("");
+    try {
+      await deleteKnowledge(item.document_id);
+      if (selectedKnowledge?.document_id === item.document_id) {
+        setSelectedKnowledge(null);
+      }
+      setMessage(`知识库已删除: ${item.name}`);
+      await loadKnowledge();
+    } catch (err) {
+      setMessage(`删除知识库失败: ${String(err)}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -663,6 +824,15 @@ function App() {
               onClick={() => navigateTo("templates")}
             >
               模板管理
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
+              className={activeSection === "knowledge" ? "nav-btn active" : "nav-btn"}
+              onClick={() => navigateTo("knowledge")}
+            >
+              知识库
             </button>
           )}
           <button type="button" className={activeSection === "tasks" ? "nav-btn active" : "nav-btn"} onClick={() => navigateTo("tasks")}>
@@ -923,6 +1093,102 @@ function App() {
         </section>
       )}
 
+      {isAdmin && activeSection === "knowledge" && (
+        <section id="knowledge" className="card">
+          <h2>知识库</h2>
+          <p className="section-desc">管理 RAG 检索资料，已启用的知识片段会在校对时注入给大模型作为参考依据。</p>
+          <div className="stats">
+            <div className="stat-card">
+              <span>文档数量</span>
+              <strong>{knowledgeItems.length}</strong>
+            </div>
+            <div className="stat-card">
+              <span>已启用</span>
+              <strong>{enabledKnowledgeCount}</strong>
+            </div>
+            <div className="stat-card">
+              <span>切片数量</span>
+              <strong>{knowledgeChunkCount}</strong>
+            </div>
+          </div>
+          <div className="grid">
+            <label>
+              搜索
+              <input
+                value={knowledgeKeyword}
+                onChange={(event) => setKnowledgeKeyword(event.target.value)}
+                placeholder="按名称、类型、正文内容搜索"
+              />
+            </label>
+            <label>
+              状态
+              <select value={knowledgeEnabledFilter} onChange={(event) => setKnowledgeEnabledFilter(event.target.value as "all" | "enabled" | "disabled")}>
+                <option value="all">全部</option>
+                <option value="enabled">仅启用</option>
+                <option value="disabled">仅停用</option>
+              </select>
+            </label>
+          </div>
+          <div className="page-actions">
+            <button type="button" onClick={openCreateKnowledgeModal} disabled={loading}>
+              上传知识文档
+            </button>
+          </div>
+
+          <div className="block">
+            <h3>知识文档列表</h3>
+            {!knowledgeItems.length && <p>当前条件下暂无知识文档。</p>}
+            {!!knowledgeItems.length && (
+              <table>
+                <thead>
+                  <tr>
+                    <th>document_id</th>
+                    <th>名称</th>
+                    <th>类型</th>
+                    <th>文件</th>
+                    <th>切片</th>
+                    <th>状态</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {knowledgeItems.map((item) => (
+                    <tr key={item.document_id}>
+                      <td>{item.document_id}</td>
+                      <td>{item.name}</td>
+                      <td>{item.doc_type}</td>
+                      <td>{item.file_type}</td>
+                      <td>{item.chunk_count}</td>
+                      <td>{item.enabled ? "启用" : "停用"}</td>
+                      <td>{item.created_at}</td>
+                      <td className="table-actions">
+                        <button type="button" onClick={() => fillKnowledgeForm(item)} disabled={loading}>
+                          编辑
+                        </button>
+                        <button type="button" onClick={() => onToggleKnowledge(item)} disabled={loading}>
+                          {item.enabled ? "停用" : "启用"}
+                        </button>
+                        <button type="button" onClick={() => onDeleteKnowledge(item)} disabled={loading}>
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {selectedKnowledge && (
+            <div className="block">
+              <h3>当前预览</h3>
+              <pre>{selectedKnowledge.raw_text}</pre>
+            </div>
+          )}
+        </section>
+      )}
+
       {activeSection === "tasks" && (
         <>
           <section id="tasks" className="card">
@@ -940,6 +1206,10 @@ function App() {
               <div className="stat-card">
                 <span>问题数量</span>
                 <strong>{resultIssueCount}</strong>
+              </div>
+              <div className="stat-card">
+                <span>知识命中</span>
+                <strong>{resultRagHitCount}</strong>
               </div>
             </div>
             <form onSubmit={onCreateTask} className="grid">
@@ -1009,6 +1279,33 @@ function App() {
             {taskResult && (
               <>
                 <pre>{JSON.stringify(taskResult.summary, null, 2)}</pre>
+                {!!taskResult.rag_hits?.length && (
+                  <div className="block">
+                    <h3>RAG 知识命中</h3>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>文本切片</th>
+                          <th>知识文档</th>
+                          <th>知识切片</th>
+                          <th>得分</th>
+                          <th>命中内容</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {taskResult.rag_hits.map((hit, index) => (
+                          <tr key={`${hit.document_id}-${hit.knowledge_chunk_index}-${index}`}>
+                            <td>{hit.chunk_index}</td>
+                            <td>{hit.document_name}</td>
+                            <td>{hit.knowledge_chunk_index}</td>
+                            <td>{hit.score.toFixed(4)}</td>
+                            <td>{hit.content_preview}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
                 <table>
                   <thead>
                     <tr>
@@ -1173,6 +1470,56 @@ function App() {
                   {editingRuleId ? "保存修改" : "创建规则"}
                 </button>
                 <button type="button" onClick={resetRuleForm} disabled={loading}>
+                  取消
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {knowledgeModalOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-card wide" role="dialog" aria-modal="true" aria-label={editingKnowledgeId ? "编辑知识库" : "上传知识库"}>
+            <div className="modal-head">
+              <div>
+                <h2>{editingKnowledgeId ? "编辑知识库" : "上传知识文档"}</h2>
+                <p>知识库会被切片并生成向量，用于校对任务中的 RAG 检索。</p>
+              </div>
+              <button type="button" className="icon-btn" onClick={resetKnowledgeForm} disabled={loading}>
+                关闭
+              </button>
+            </div>
+            <form onSubmit={onSubmitKnowledge} className="grid">
+              <label>
+                名称
+                <input value={knowledgeName} onChange={(event) => setKnowledgeName(event.target.value)} placeholder="例如 公文写作规范" />
+              </label>
+              <label>
+                类型
+                <input value={knowledgeDocType} onChange={(event) => setKnowledgeDocType(event.target.value)} placeholder="general/policy/style/..." />
+              </label>
+              {!editingKnowledgeId && (
+                <label className="full">
+                  文件
+                  <input type="file" accept=".docx,.txt,.md" onChange={onKnowledgeFileChange} />
+                </label>
+              )}
+              {editingKnowledgeId && (
+                <label className="full">
+                  正文
+                  <textarea value={knowledgeRawText} onChange={(event) => setKnowledgeRawText(event.target.value)} rows={12} />
+                </label>
+              )}
+              <label className="checkbox">
+                <input type="checkbox" checked={knowledgeEnabled} onChange={(event) => setKnowledgeEnabled(event.target.checked)} />
+                知识库启用
+              </label>
+              <div className="actions full">
+                <button type="submit" disabled={loading}>
+                  {editingKnowledgeId ? "保存修改" : "上传文档"}
+                </button>
+                <button type="button" onClick={resetKnowledgeForm} disabled={loading}>
                   取消
                 </button>
               </div>

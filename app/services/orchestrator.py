@@ -6,10 +6,18 @@ from app.services.boundary_guard import clamp_issues
 from app.services.chunker import split_text_with_offsets
 from app.services.llm_ollama import check_with_llm
 from app.services.merger import dedup_issues
+from app.services.rag import RagHit, build_rag_context as _default_build_rag_context, build_rag_context_with_hits
 from app.services.rule_engine import check_rules
 from app.services.rule_repository import build_rule_pack_summary, load_public_rules, load_private_rules, build_template_rules
 
 logger = get_logger(__name__)
+build_rag_context = _default_build_rag_context
+
+
+def _collect_rag_context(query: str, chunk_index: int) -> tuple[str, list[RagHit]]:
+    if build_rag_context is not _default_build_rag_context:
+        return build_rag_context(query), []
+    return build_rag_context_with_hits(query, chunk_index=chunk_index)
 
 
 def _build_rule_pack(owner_id: str | None, template_rule_pack: str = "{}") -> str:
@@ -79,7 +87,13 @@ def _filter_overexpanded_llm_issues(issues: list[StoredIssue], chunk: str) -> li
     return filtered
 
 
-async def run_proofread(text: str, mode: str, scene: str, owner_id: str | None = None) -> list[StoredIssue]:
+async def run_proofread(
+    text: str,
+    mode: str,
+    scene: str,
+    owner_id: str | None = None,
+    rag_hits: list[RagHit] | None = None,
+) -> list[StoredIssue]:
     started_at = now_perf()
     chunks = split_text_with_offsets(text)
     all_issues: list[StoredIssue] = []
@@ -99,8 +113,11 @@ async def run_proofread(text: str, mode: str, scene: str, owner_id: str | None =
 
     for idx, (chunk, offset) in enumerate(chunks):
         rule_issues = check_rules(chunk, owner_id=owner_id, layer="chunk", offset=offset)
+        rag_context, chunk_rag_hits = _collect_rag_context(chunk, chunk_index=idx)
+        if rag_hits is not None:
+            rag_hits.extend(chunk_rag_hits)
         llm_issues = _fill_issue_positions_from_chunk(
-            await check_with_llm(chunk, mode=mode, scene=scene, rule_pack=llm_rule_pack),
+            await check_with_llm(chunk, mode=mode, scene=scene, rule_pack=llm_rule_pack, rag_context=rag_context),
             chunk=chunk,
             offset=offset,
         )
@@ -113,6 +130,7 @@ async def run_proofread(text: str, mode: str, scene: str, owner_id: str | None =
             chunk_index=idx,
             rule_issue_count=len(rule_issues),
             llm_issue_count=len(llm_issues),
+            rag_hit_count=len(chunk_rag_hits),
             chunk_length=len(chunk),
         )
         all_issues.extend(rule_issues + llm_issues)
@@ -136,8 +154,14 @@ async def run_proofread(text: str, mode: str, scene: str, owner_id: str | None =
     return clamped_issues
 
 
-def run_proofread_sync(text: str, mode: str, scene: str, owner_id: str | None = None) -> list[StoredIssue]:
-    return asyncio.run(run_proofread(text=text, mode=mode, scene=scene, owner_id=owner_id))
+def run_proofread_sync(
+    text: str,
+    mode: str,
+    scene: str,
+    owner_id: str | None = None,
+    rag_hits: list[RagHit] | None = None,
+) -> list[StoredIssue]:
+    return asyncio.run(run_proofread(text=text, mode=mode, scene=scene, owner_id=owner_id, rag_hits=rag_hits))
 
 
 async def run_proofread_with_template(
@@ -146,6 +170,7 @@ async def run_proofread_with_template(
     scene: str,
     template_rule_pack: str,
     owner_id: str | None = None,
+    rag_hits: list[RagHit] | None = None,
 ) -> list[StoredIssue]:
     started_at = now_perf()
     chunks = split_text_with_offsets(text)
@@ -166,8 +191,11 @@ async def run_proofread_with_template(
 
     for idx, (chunk, offset) in enumerate(chunks):
         rule_issues = check_rules(chunk, owner_id=owner_id, template_rule_pack=template_rule_pack, layer="chunk", offset=offset)
+        rag_context, chunk_rag_hits = _collect_rag_context(chunk, chunk_index=idx)
+        if rag_hits is not None:
+            rag_hits.extend(chunk_rag_hits)
         llm_issues = _fill_issue_positions_from_chunk(
-            await check_with_llm(chunk, mode=mode, scene=scene, rule_pack=llm_rule_pack),
+            await check_with_llm(chunk, mode=mode, scene=scene, rule_pack=llm_rule_pack, rag_context=rag_context),
             chunk=chunk,
             offset=offset,
         )
@@ -180,6 +208,7 @@ async def run_proofread_with_template(
             chunk_index=idx,
             rule_issue_count=len(rule_issues),
             llm_issue_count=len(llm_issues),
+            rag_hit_count=len(chunk_rag_hits),
             chunk_length=len(chunk),
         )
         all_issues.extend(rule_issues + llm_issues)
@@ -209,6 +238,7 @@ def run_proofread_with_template_sync(
     scene: str,
     template_rule_pack: str,
     owner_id: str | None = None,
+    rag_hits: list[RagHit] | None = None,
 ) -> list[StoredIssue]:
     return asyncio.run(
         run_proofread_with_template(
@@ -217,5 +247,6 @@ def run_proofread_with_template_sync(
             scene=scene,
             template_rule_pack=template_rule_pack,
             owner_id=owner_id,
+            rag_hits=rag_hits,
         )
     )

@@ -6,12 +6,13 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import SessionLocal
-from app.models import ProofreadIssue, ProofreadTask, Template
+from app.models import ProofreadIssue, ProofreadRagHit, ProofreadTask, Template
 from app.queue import enqueue_proofread_task, get_redis_conn
 from app.schemas import (
     CreateTaskReq,
     CreateTaskResp,
     IssueOut,
+    RagHitOut,
     RetryTaskResp,
     TaskResultResp,
     TaskStatusResp,
@@ -126,6 +127,23 @@ def get_result(task_id: str, db: Session = Depends(get_db), current_user: dict =
         IssueOut.model_validate(from_issue_record(row).model_dump())
         for row in rows
     ]
+    rag_rows = db.execute(
+        select(ProofreadRagHit)
+        .where(ProofreadRagHit.task_id == task_id)
+        .order_by(ProofreadRagHit.chunk_index.asc(), ProofreadRagHit.score.desc())
+    ).scalars().all()
+    rag_hits = [
+        RagHitOut(
+            chunk_index=row.chunk_index,
+            document_id=row.document_id,
+            document_name=row.document_name,
+            knowledge_chunk_index=row.knowledge_chunk_index,
+            score=row.score,
+            content_preview=row.content_preview,
+            created_at=row.created_at.isoformat(),
+        )
+        for row in rag_rows
+    ]
 
     summary = {
         "total_issues": len(issues),
@@ -133,4 +151,4 @@ def get_result(task_id: str, db: Session = Depends(get_db), current_user: dict =
         "p1": len([x for x in issues if x.severity == "P1"]),
         "p2": len([x for x in issues if x.severity == "P2"]),
     }
-    return TaskResultResp(task_id=task_id, status=task.status, summary=summary, issues=issues)
+    return TaskResultResp(task_id=task_id, status=task.status, summary=summary, issues=issues, rag_hits=rag_hits)

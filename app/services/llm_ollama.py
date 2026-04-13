@@ -32,11 +32,12 @@ def _truncate_text(value: str, max_len: int = 1200) -> str:
     return f"{value[:max_len]}...(truncated, total={len(value)})"
 
 
-def build_user_prompt(chunk: str, mode: str, scene: str, rule_pack: str = "{}") -> str:
+def build_user_prompt(chunk: str, mode: str, scene: str, rule_pack: str = "{}", rag_context: str = "无") -> str:
     return USER_PROMPT_TEMPLATE.format(
         mode=mode,
         scene=scene,
         rule_pack=rule_pack,
+        rag_context=rag_context,
         chunk_text=chunk,
     )
 
@@ -46,10 +47,11 @@ def _build_repair_user_prompt(
     mode: str,
     scene: str,
     rule_pack: str,
+    rag_context: str,
     invalid_output: str,
     validation_error: str,
 ) -> str:
-    base_prompt = build_user_prompt(chunk=chunk, mode=mode, scene=scene, rule_pack=rule_pack)
+    base_prompt = build_user_prompt(chunk=chunk, mode=mode, scene=scene, rule_pack=rule_pack, rag_context=rag_context)
     return (
         f"{base_prompt}\n\n"
         "[Previous invalid output]\n"
@@ -210,10 +212,10 @@ def _validate_response(content: str) -> list[StoredIssue]:
     return validate_llm_response(content)
 
 
-async def check_with_llm(chunk: str, mode: str, scene: str, rule_pack: str = "{}") -> list[StoredIssue]:
+async def check_with_llm(chunk: str, mode: str, scene: str, rule_pack: str = "{}", rag_context: str = "无") -> list[StoredIssue]:
     messages_first = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": build_user_prompt(chunk, mode, scene, rule_pack)},
+        {"role": "user", "content": build_user_prompt(chunk, mode, scene, rule_pack, rag_context)},
     ]
     content = await _call_llm_chat(messages=messages_first, attempt=1)
     if content is None:
@@ -244,6 +246,7 @@ async def check_with_llm(chunk: str, mode: str, scene: str, rule_pack: str = "{}
                 mode=mode,
                 scene=scene,
                 rule_pack=rule_pack,
+                rag_context=rag_context,
                 invalid_output=content,
                 validation_error=validation_error,
             ),

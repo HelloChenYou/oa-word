@@ -10,10 +10,12 @@ from sqlalchemy.pool import StaticPool
 
 from app import models
 from app.db import Base
+from app.routers import knowledge as knowledge_module
 from app.routers import ops as ops_module
 from app.routers import tasks as tasks_module
 from app.routers import templates as templates_module
 from app.routers.auth import router as auth_router
+from app.routers.knowledge import router as knowledge_router
 from app.routers.ops import router as ops_router
 from app.routers.rules import router as rules_router
 from app.routers.tasks import router as tasks_router
@@ -43,10 +45,12 @@ def _build_test_client(monkeypatch):
     test_app.include_router(rules_router, dependencies=[Depends(require_admin)])
     test_app.include_router(tasks_router, dependencies=[Depends(require_authenticated)])
     test_app.include_router(templates_router, dependencies=[Depends(require_admin)])
+    test_app.include_router(knowledge_router, dependencies=[Depends(require_admin)])
     test_app.include_router(ops_router, dependencies=[Depends(require_admin)])
 
     test_app.dependency_overrides[tasks_module.get_db] = override_get_db
     test_app.dependency_overrides[templates_module.get_db] = override_get_db
+    test_app.dependency_overrides[knowledge_module.get_db] = override_get_db
 
     monkeypatch.setattr(tasks_module, "ensure_submit_rate_limit", lambda *args, **kwargs: None)
     monkeypatch.setattr(tasks_module, "ensure_active_tasks_within_limit", lambda *args, **kwargs: None)

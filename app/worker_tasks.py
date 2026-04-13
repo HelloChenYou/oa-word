@@ -4,7 +4,7 @@ from sqlalchemy import delete
 
 from app.db import SessionLocal
 from app.logging_utils import configure_logging, elapsed_ms, get_logger, log_exception, log_info, now_perf
-from app.models import ProofreadIssue, ProofreadTask, Template
+from app.models import ProofreadIssue, ProofreadRagHit, ProofreadTask, Template
 from app.queue import enqueue_proofread_task
 from app.services.boundary_guard import clamp_error_message
 from app.services.issue_converter import to_issue_record
@@ -37,6 +37,7 @@ def process_proofread_task(task_id: str, owner_id: str | None = None) -> None:
         task.failure_reason = ""
         task.finished_at = None
         db.execute(delete(ProofreadIssue).where(ProofreadIssue.task_id == task_id))
+        db.execute(delete(ProofreadRagHit).where(ProofreadRagHit.task_id == task_id))
         db.commit()
 
         template_rule_pack = "{}"
@@ -45,6 +46,7 @@ def process_proofread_task(task_id: str, owner_id: str | None = None) -> None:
             if template:
                 template_rule_pack = template.parsed_json
 
+        rag_hits = []
         if template_rule_pack != "{}":
             issues = run_proofread_with_template_sync(
                 task.source_text,
@@ -52,12 +54,25 @@ def process_proofread_task(task_id: str, owner_id: str | None = None) -> None:
                 scene=task.scene,
                 template_rule_pack=template_rule_pack,
                 owner_id=owner_id,
+                rag_hits=rag_hits,
             )
         else:
-            issues = run_proofread_sync(task.source_text, mode=task.mode, scene=task.scene, owner_id=owner_id)
+            issues = run_proofread_sync(task.source_text, mode=task.mode, scene=task.scene, owner_id=owner_id, rag_hits=rag_hits)
 
         for issue in issues:
             db.add(to_issue_record(task_id=task_id, issue=issue))
+        for hit in rag_hits:
+            db.add(
+                ProofreadRagHit(
+                    task_id=task_id,
+                    chunk_index=hit.chunk_index,
+                    document_id=hit.document_id,
+                    document_name=hit.document_name,
+                    knowledge_chunk_index=hit.knowledge_chunk_index,
+                    score=hit.score,
+                    content_preview=hit.content_preview,
+                )
+            )
 
         task.status = "success"
         task.error_msg = ""
@@ -69,6 +84,7 @@ def process_proofread_task(task_id: str, owner_id: str | None = None) -> None:
             "task_success",
             task_id=task_id,
             issue_count=len(issues),
+            rag_hit_count=len(rag_hits),
             duration_ms=elapsed_ms(started_at),
         )
     except Exception as exc:

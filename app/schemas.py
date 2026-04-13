@@ -43,11 +43,22 @@ class IssueOut(StoredIssue):
     """External API issue shape."""
 
 
+class RagHitOut(BaseModel):
+    chunk_index: int
+    document_id: str
+    document_name: str
+    knowledge_chunk_index: int
+    score: float
+    content_preview: str
+    created_at: str
+
+
 class TaskResultResp(BaseModel):
     task_id: str
     status: str
     summary: dict
     issues: List[IssueOut]
+    rag_hits: List[RagHitOut] = []
 
 
 class CreateTemplateResp(BaseModel):
@@ -74,6 +85,35 @@ class TemplateDetailResp(BaseModel):
     raw_text: str
     parsed: dict
     created_at: str
+
+
+class CreateKnowledgeResp(BaseModel):
+    document_id: str
+    name: str
+    doc_type: str
+    file_type: str
+    chunk_count: int
+
+
+class KnowledgeOut(BaseModel):
+    document_id: str
+    name: str
+    doc_type: str
+    file_type: str
+    enabled: bool
+    chunk_count: int
+    created_at: str
+
+
+class KnowledgeDetailResp(KnowledgeOut):
+    raw_text: str
+
+
+class UpdateKnowledgeReq(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    doc_type: str | None = Field(default=None, min_length=1, max_length=32)
+    enabled: bool | None = None
+    raw_text: str | None = Field(default=None, min_length=1)
 
 
 class CreateRuleReq(BaseModel):

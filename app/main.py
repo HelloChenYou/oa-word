@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings, validate_runtime_settings
 from app.logging_utils import configure_logging
 from app.routers.auth import router as auth_router
+from app.routers.knowledge import router as knowledge_router
 from app.routers.ops import router as ops_router
 from app.routers.rules import router as rules_router
 from app.routers.tasks import router as tasks_router
@@ -61,6 +62,7 @@ app.include_router(users_router, dependencies=[Depends(require_admin)])
 app.include_router(rules_router, dependencies=[Depends(require_authenticated)])
 app.include_router(tasks_router, dependencies=[Depends(require_authenticated)])
 app.include_router(templates_router, dependencies=[Depends(require_admin)])
+app.include_router(knowledge_router, dependencies=[Depends(require_admin)])
 app.include_router(ops_router, dependencies=[Depends(require_admin)])
 
 

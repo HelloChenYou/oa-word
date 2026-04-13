@@ -14,6 +14,20 @@ export type TemplateDetail = TemplateItem & {
   };
 };
 
+export type KnowledgeItem = {
+  document_id: string;
+  name: string;
+  doc_type: string;
+  file_type: string;
+  enabled: boolean;
+  chunk_count: number;
+  created_at: string;
+};
+
+export type KnowledgeDetail = KnowledgeItem & {
+  raw_text: string;
+};
+
 export type Issue = {
   severity: string;
   category: string;
@@ -33,6 +47,15 @@ export type TaskResult = {
   status: string;
   summary: Record<string, number>;
   issues: Issue[];
+  rag_hits?: Array<{
+    chunk_index: number;
+    document_id: string;
+    document_name: string;
+    knowledge_chunk_index: number;
+    score: number;
+    content_preview: string;
+    created_at: string;
+  }>;
 };
 
 export type RuleScope = "public" | "private" | "template";

@@ -77,8 +77,9 @@ def test_fill_issue_positions_from_chunk_falls_back_when_model_position_points_t
 def test_run_proofread_fills_llm_positions(monkeypatch):
     monkeypatch.setattr(orchestrator, "_build_rule_pack", lambda owner_id, template_rule_pack="{}": "{}")
     monkeypatch.setattr(orchestrator, "check_rules", lambda *args, **kwargs: [])
+    monkeypatch.setattr(orchestrator, "build_rag_context", lambda *args, **kwargs: "无")
 
-    async def fake_check_with_llm(chunk, mode, scene, rule_pack="{}"):
+    async def fake_check_with_llm(chunk, mode, scene, rule_pack="{}", rag_context="无"):
         return [make_llm_issue("login")]
 
     monkeypatch.setattr(orchestrator, "check_with_llm", fake_check_with_llm)

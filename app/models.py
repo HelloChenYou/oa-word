@@ -44,6 +44,20 @@ class ProofreadIssue(Base):
     position_end: Mapped[int] = mapped_column(Integer)
 
 
+class ProofreadRagHit(Base):
+    __tablename__ = "proofread_rag_hits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[str] = mapped_column(ForeignKey("proofread_tasks.id"), index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer)
+    document_id: Mapped[str] = mapped_column(String(64), index=True)
+    document_name: Mapped[str] = mapped_column(String(128))
+    knowledge_chunk_index: Mapped[int] = mapped_column(Integer)
+    score: Mapped[float] = mapped_column(Float)
+    content_preview: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Template(Base):
     __tablename__ = "templates"
 
@@ -54,6 +68,30 @@ class Template(Base):
     file_path: Mapped[str] = mapped_column(String(512))
     raw_text: Mapped[str] = mapped_column(Text)
     parsed_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class KnowledgeDocument(Base):
+    __tablename__ = "knowledge_documents"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    doc_type: Mapped[str] = mapped_column(String(32), default="general")
+    file_type: Mapped[str] = mapped_column(String(16))
+    file_path: Mapped[str] = mapped_column(String(512))
+    raw_text: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class KnowledgeChunk(Base):
+    __tablename__ = "knowledge_chunks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    document_id: Mapped[str] = mapped_column(ForeignKey("knowledge_documents.id"), index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer)
+    content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
